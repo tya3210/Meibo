@@ -1,145 +1,253 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>部活出欠確認</title>
+<title>部活動出欠管理</title>
+<meta charset="UTF-8">
 <style>
 body { font-family: sans-serif; }
-.admin-panel { display: none; }
+h1, h2 { text-align: center; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+th, td { border: 1px solid black; padding: 8px; text-align: center; }
+th { background-color: #f0f0f0; }
+.button-container { text-align: center; margin-bottom: 20px; }
+button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+#addMemberSection { display: none; margin-bottom: 20px; border: 1px solid #ccc; padding: 15px; }
+#addMemberSection h2 { margin-top: 0; }
+#addMemberSection input[type="text"], #addMemberSection input[type="password"] { width: calc(100% - 22px); padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; }
+.attendance-checkbox { transform: scale(1.5); /* チェックボックスを大きく */ }
 </style>
 </head>
 <body>
-<h1>部活出欠確認</h1>
 
-<div id="password-form">
-  <label for="password">パスワード:</label>
-  <input type="password" id="password">
-  <button onclick="checkPassword()">ログイン</button>
+<h1>[あなたの部活動名] 出欠管理</h1>
+
+<div id="addMemberSection">
+    <h2>メンバー追加・編集 (管理者用)</h2>
+    <input type="password" id="adminPassword" placeholder="管理者パスワード">
+    <button onclick="checkAdminPassword()">認証</button>
+    <div id="addMemberForm" style="display: none;">
+        <input type="text" id="newMemberName" placeholder="新しいメンバー名">
+        <button onclick="addMember()">メンバー追加</button>
+        <ul id="memberList"></ul> <br>
+        <button onclick="saveMembers()">メンバーリストを保存</button>
+    </div>
 </div>
 
-<div id="instrument-select" style="display: none;">
-  <label for="instrument">楽器を選択:</label>
-  <select id="instrument">
-    <option value="フルート">フルート</option>
-    <option value="クラリネット">クラリネット</option>
-    <option value="オーボエ">オーボエ</option>
-    <option value="サックス">サックス</option>
-    <option value="トランペット">トランペット</option>
-    <option value="ホルン">ホルン</option>
-    <option value="トロンボーン">トロンボーン</option>
-    <option value="ユーフォニアム">ユーフォニアム</option>
-    <option value="コントラバス">コントラバス</option>
-    <option value="チューバ">チューバ</option>
-    <option value="パーカッション">パーカッション</option>
-  </select>
-  <button onclick="showAttendance()">選択</button>
+<div class="button-container">
+    <button onclick="toggleAddMemberSection()">メンバー追加・編集</button>
 </div>
 
-<div id="attendance-form" style="display: none;">
-  <h2>出欠確認</h2>
-  <ul id="member-list"></ul>
-  <input type="text" id="new-member-name" placeholder="新しい部員名">
-  <button onclick="addMember()">追加</button>
-  <button onclick="toggleAdmin()">管理者モード</button>
-</div>
+<h2>出欠状況 (本日: <span id="todayDate"></span>)</h2>
 
-<div class="admin-panel">
-  <h2>管理者パネル</h2>
-  <ul id="admin-member-list"></ul>
+<table id="attendanceTable">
+    <thead>
+        <tr>
+            <th>名前</th>
+            <th>出席</th>
+            <th>欠席</th>
+        </tr>
+    </thead>
+    <tbody id="attendanceTableBody">
+        </tbody>
+</table>
+
+<div class="button-container">
+    <button onclick="updateAttendance()">出欠を更新</button>
 </div>
 
 <script>
-const correctPassword = "Brassband";
-let isAdmin = false;
-let currentInstrument = "";
-let members = {};
+const adminPass = "admin123"; // ★★★ 管理者パスワード ★★★  <- 必要に応じて変更してください。
+let adminMode = false; // 管理者モードの状態を保持
 
-function checkPassword() {
-  const password = document.getElementById("password").value;
-  if (password === correctPassword) {
-    document.getElementById("password-form").style.display = "none";
-    document.getElementById("instrument-select").style.display = "block";
-  } else {
-    alert("パスワードが違います");
-  }
+document.addEventListener('DOMContentLoaded', function() {
+    updateTodayDate();
+    loadMembers();
+    loadAttendance();
+    renderAttendanceTable();
+});
+
+function updateTodayDate() {
+    const todaySpan = document.getElementById('todayDate');
+    const today = new Date();
+    const formattedDate = today.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
+    todaySpan.textContent = formattedDate;
 }
 
-function showAttendance() {
-  currentInstrument = document.getElementById("instrument").value;
-  if (!members[currentInstrument]) {
-    members[currentInstrument] = [];
-  }
-  document.getElementById("instrument-select").style.display = "none";
-  document.getElementById("attendance-form").style.display = "block";
-  updateMemberList();
+function toggleAddMemberSection() {
+    const section = document.getElementById('addMemberSection');
+    section.style.display = section.style.display === 'none' ? 'block' : 'none';
+    const form = document.getElementById('addMemberForm');
+    form.style.display = 'none'; // メンバー追加フォームも非表示にする
 }
 
-function updateMemberList() {
-  const memberList = document.getElementById("member-list");
-  memberList.innerHTML = "";
-  members[currentInstrument].forEach(member => {
-    const li = document.createElement("li");
-    li.textContent = member;
-    memberList.appendChild(li);
-  });
+function checkAdminPassword() {
+    const passwordInput = document.getElementById('adminPassword');
+    const form = document.getElementById('addMemberForm');
+    if (passwordInput.value === adminPass) {
+        form.style.display = 'block';
+        loadMemberList(); // メンバーリストをロード
+        passwordInput.value = ''; // パスワード入力欄をクリア
+        alert('管理者モードになりました。');
+        adminMode = true; // 管理者モードON
+    } else {
+        alert('パスワードが違います。');
+        form.style.display = 'none'; // フォームを非表示に戻す
+        adminMode = false; // 管理者モードOFF
+    }
 }
 
-function addMember() {
-  const name = document.getElementById("new-member-name").value;
-  if (name) {
-    members[currentInstrument].push(name);
-    document.getElementById("new-member-name").value = "";
-    updateMemberList();
-    updateAdminMemberList();
-  }
+
+let members = []; // メンバーリストを保存する配列
+
+function loadMembers() {
+    const storedMembers = localStorage.getItem('members');
+    if (storedMembers) {
+        members = JSON.parse(storedMembers);
+    } else {
+        members = ["メンバー１", "メンバー２", "メンバー３"]; // 初期メンバーの例
+        saveMembers(); // 初期メンバーリストを保存
+    }
 }
 
-function toggleAdmin() {
-  isAdmin = !isAdmin;
-  const adminPanels = document.querySelectorAll(".admin-panel");
-  adminPanels.forEach(panel => {
-    panel.style.display = isAdmin ? "block" : "none";
-  });
-  updateAdminMemberList();
-}
-
-function updateAdminMemberList() {
-    if (!isAdmin) return;
-    const adminMemberList = document.getElementById("admin-member-list");
-    adminMemberList.innerHTML = "";
-    Object.keys(members).forEach(instrument => {
-        const instrumentHeader = document.createElement("h3");
-        instrumentHeader.textContent = instrument;
-        adminMemberList.appendChild(instrumentHeader);
-
-        members[instrument].forEach((member, index) => {
-            const li = document.createElement("li");
-            li.textContent = member;
-
-            const deleteButton = document.createElement("button");
-            deleteButton.textContent = "削除";
-            deleteButton.onclick = () => {
-                members[instrument].splice(index, 1);
-                updateAdminMemberList();
-                updateMemberList();
-            };
-            li.appendChild(deleteButton);
-
-            const editButton = document.createElement("button");
-            editButton.textContent = "編集";
-            editButton.onclick = () => {
-                const newName = prompt("新しい部員名を入力してください", member);
-                if (newName) {
-                    members[instrument][index] = newName;
-                    updateAdminMemberList();
-                    updateMemberList();
-                }
-            };
-            li.appendChild(editButton);
-
-            adminMemberList.appendChild(li);
-        });
+function loadMemberList() { // 管理者画面用のメンバーリスト表示
+    const memberListUl = document.getElementById('memberList');
+    memberListUl.innerHTML = ''; // リストをクリア
+    members.forEach((member, index) => {
+        const listItem = document.createElement('li');
+        listItem.textContent = member;
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = '削除';
+        deleteButton.onclick = function() { deleteMember(index); };
+        listItem.appendChild(deleteButton);
+        memberListUl.appendChild(listItem);
     });
 }
+
+
+function addMember() {
+    if (!adminMode) {
+        alert('管理者モードでのみメンバー追加が可能です。');
+        return;
+    }
+    const newMemberNameInput = document.getElementById('newMemberName');
+    const newMemberName = newMemberNameInput.value.trim();
+    if (newMemberName && !members.includes(newMemberName)) { // 空でない、かつ重複しない場合のみ追加
+        members.push(newMemberName);
+        newMemberNameInput.value = ''; // 入力欄をクリア
+        saveMembers(); // メンバーリストを保存
+        loadMemberList(); // メンバーリストを再表示
+        renderAttendanceTable(); // 出席テーブルを再描画
+        alert(newMemberName + ' さんを追加しました。');
+    } else if (!newMemberName) {
+        alert('メンバー名を入力してください。');
+    } else {
+        alert('そのメンバーは既に登録されています。');
+    }
+}
+
+function deleteMember(index) {
+    if (!adminMode) {
+        alert('管理者モードでのみメンバー削除が可能です。');
+        return;
+    }
+    if (confirm(members[index] + ' さんを削除してもよろしいですか？')) {
+        members.splice(index, 1); // メンバーを削除
+        saveMembers(); // メンバーリストを保存
+        loadMemberList(); // メンバーリストを再表示
+        renderAttendanceTable(); // 出席テーブルを再描画
+        alert('メンバーを削除しました。');
+    }
+}
+
+
+function saveMembers() {
+    localStorage.setItem('members', JSON.stringify(members));
+}
+
+
+function loadAttendance() {
+    const today = getFormattedDate();
+    const storedAttendance = localStorage.getItem('attendance_' + today);
+    if (!storedAttendance) {
+        // 今日の出欠データがなければ初期化
+        initializeAttendanceForToday();
+        return;
+    }
+    attendanceData = JSON.parse(storedAttendance);
+}
+
+function initializeAttendanceForToday() {
+    attendanceData = members.map(() => ({ present: false })); // デフォルトは全員「欠席」
+    saveAttendance(); // 初期状態を保存
+}
+
+
+let attendanceData = []; // 出席データを保存する配列
+
+function renderAttendanceTable() {
+    const tableBody = document.getElementById('attendanceTableBody');
+    tableBody.innerHTML = ''; // テーブル内容をクリア
+
+    members.forEach((member, index) => {
+        const row = tableBody.insertRow();
+        const nameCell = row.insertCell(0);
+        const presentCell = row.insertCell(1);
+        const absentCell = row.insertCell(2);
+
+        nameCell.textContent = member;
+
+        // 出席ラジオボタン
+        const presentRadio = document.createElement('input');
+        presentRadio.type = 'radio';
+        presentRadio.name = `attendance_${index}`;
+        presentRadio.value = 'present';
+        presentRadio.classList.add('attendance-checkbox'); // クラスを追加
+        presentRadio.checked = attendanceData[index]?.present === true;
+        presentCell.appendChild(presentRadio);
+
+        // 欠席ラジオボタン
+        const absentRadio = document.createElement('input');
+        absentRadio.type = 'radio';
+        absentRadio.name = `attendance_${index}`;
+        absentRadio.value = 'absent';
+        absentRadio.classList.add('attendance-checkbox'); // クラスを追加
+        absentRadio.checked = attendanceData[index]?.present === false;
+        absentCell.appendChild(absentRadio);
+    });
+}
+
+
+function updateAttendance() {
+    const today = getFormattedDate();
+    attendanceData = members.map((member, index) => {
+        const radioNodes = document.querySelectorAll(`input[name="attendance_${index}"]`);
+        let isPresent = false;
+        radioNodes.forEach(radio => {
+            if (radio.value === 'present' && radio.checked) {
+                isPresent = true;
+            }
+        });
+        return { present: isPresent };
+    });
+    saveAttendance();
+    alert('出欠状況を更新しました。');
+}
+
+function saveAttendance() {
+    const today = getFormattedDate();
+    localStorage.setItem('attendance_' + today, JSON.stringify(attendanceData));
+}
+
+function getFormattedDate() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`; // YYYY-MM-DD形式
+}
+
+
 </script>
+
 </body>
 </html>
