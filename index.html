@@ -1,232 +1,145 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>部活出欠管理サイト</title>
-  <style>
-    body { font-family: sans-serif; margin: 20px; }
-    h2 { border-bottom: 1px solid #ccc; padding-bottom: 5px; }
-    #instrumentSelection, #attendanceSection, #adminSection, #adminLogin {
-      margin-bottom: 20px;
-      padding: 10px;
-      border: 1px solid #aaa;
-      border-radius: 5px;
-    }
-    label { display: block; margin: 5px 0; }
-    button { margin: 5px; }
-    .name-item { margin: 5px 0; }
-    .name-item span { margin-right: 10px; }
-  </style>
+<title>部活出欠確認</title>
+<style>
+body { font-family: sans-serif; }
+.admin-panel { display: none; }
+</style>
 </head>
 <body>
-  <!-- 楽器選択セクション -->
-  <div id="instrumentSelection">
-    <h2>楽器を選択してください</h2>
-    <form id="instrumentForm">
-      <label><input type="checkbox" name="instruments" value="フルート"> フルート</label>
-      <label><input type="checkbox" name="instruments" value="クラリネット"> クラリネット</label>
-      <label><input type="checkbox" name="instruments" value="オーボエ"> オーボエ</label>
-      <label><input type="checkbox" name="instruments" value="サックス"> サックス</label>
-      <label><input type="checkbox" name="instruments" value="トランペット"> トランペット</label>
-      <label><input type="checkbox" name="instruments" value="ホルン"> ホルン</label>
-      <label><input type="checkbox" name="instruments" value="トロンボーン"> トロンボーン</label>
-      <label><input type="checkbox" name="instruments" value="ユーフォニアム"> ユーフォニアム</label>
-      <label><input type="checkbox" name="instruments" value="コントラバス"> コントラバス</label>
-      <label><input type="checkbox" name="instruments" value="チューバ"> チューバ</label>
-      <label><input type="checkbox" name="instruments" value="パーカッション"> パーカッション</label>
-      <br>
-      <button type="submit">出欠をとる</button>
-    </form>
-  </div>
+<h1>部活出欠確認</h1>
 
-  <!-- 出欠入力セクション -->
-  <div id="attendanceSection" style="display:none;">
-    <h2>出欠確認</h2>
-    <div id="attendanceList">
-      <!-- 各名前のチェックボックスを動的に生成 -->
-    </div>
-    <button id="saveAttendance">保存</button>
-    <button id="adminToggle">管理者モード</button>
-  </div>
+<div id="password-form">
+  <label for="password">パスワード:</label>
+  <input type="password" id="password">
+  <button onclick="checkPassword()">ログイン</button>
+</div>
 
-  <!-- 管理者ログインセクション -->
-  <div id="adminLogin" style="display:none;">
-    <h2>管理者ログイン</h2>
-    <input type="password" id="adminPassword" placeholder="パスワード">
-    <button id="loginAdmin">ログイン</button>
-  </div>
+<div id="instrument-select" style="display: none;">
+  <label for="instrument">楽器を選択:</label>
+  <select id="instrument">
+    <option value="フルート">フルート</option>
+    <option value="クラリネット">クラリネット</option>
+    <option value="オーボエ">オーボエ</option>
+    <option value="サックス">サックス</option>
+    <option value="トランペット">トランペット</option>
+    <option value="ホルン">ホルン</option>
+    <option value="トロンボーン">トロンボーン</option>
+    <option value="ユーフォニアム">ユーフォニアム</option>
+    <option value="コントラバス">コントラバス</option>
+    <option value="チューバ">チューバ</option>
+    <option value="パーカッション">パーカッション</option>
+  </select>
+  <button onclick="showAttendance()">選択</button>
+</div>
 
-  <!-- 管理者モードセクション -->
-  <div id="adminSection" style="display:none;">
-    <h2>管理者モード</h2>
-    <button id="exitAdmin">終了</button>
-    <h3>人名の追加</h3>
-    <input type="text" id="newName" placeholder="名前">
-    <button id="addName">追加</button>
-    <h3>名前の一覧</h3>
-    <div id="nameList">
-      <!-- 追加された名前の一覧を動的に生成 -->
-    </div>
-  </div>
+<div id="attendance-form" style="display: none;">
+  <h2>出欠確認</h2>
+  <ul id="member-list"></ul>
+  <input type="text" id="new-member-name" placeholder="新しい部員名">
+  <button onclick="addMember()">追加</button>
+  <button onclick="toggleAdmin()">管理者モード</button>
+</div>
 
-  <script>
-    // 今日の日付を "YYYY-MM-DD" 形式で取得する関数
-    function getTodayKey() {
-      const d = new Date();
-      return d.getFullYear() + "-" +
-             (d.getMonth() + 1).toString().padStart(2, '0') + "-" +
-             d.getDate().toString().padStart(2, '0');
-    }
+<div class="admin-panel">
+  <h2>管理者パネル</h2>
+  <ul id="admin-member-list"></ul>
+</div>
 
-    // 名前リストを localStorage から取得（なければ空配列）
-    function loadNames() {
-      let names = localStorage.getItem("names");
-      return names ? JSON.parse(names) : [];
-    }
+<script>
+const correctPassword = "Brassband";
+let isAdmin = false;
+let currentInstrument = "";
+let members = {};
 
-    // 名前リストを localStorage に保存
-    function saveNames(names) {
-      localStorage.setItem("names", JSON.stringify(names));
-    }
+function checkPassword() {
+  const password = document.getElementById("password").value;
+  if (password === correctPassword) {
+    document.getElementById("password-form").style.display = "none";
+    document.getElementById("instrument-select").style.display = "block";
+  } else {
+    alert("パスワードが違います");
+  }
+}
 
-    // 出欠状況をレンダリング（localStorage に保存された当日のデータを反映）
-    function renderAttendance() {
-      const names = loadNames();
-      const todayKey = "attendance_" + getTodayKey();
-      let attendance = localStorage.getItem(todayKey);
-      attendance = attendance ? JSON.parse(attendance) : {};
-      const container = document.getElementById("attendanceList");
-      container.innerHTML = "";
-      names.forEach((name) => {
-        const div = document.createElement("div");
-        const label = document.createElement("label");
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.checked = attendance[name] || false;
-        // チェック状態の変更を attendance オブジェクトに反映
-        checkbox.onchange = function() {
-          attendance[name] = checkbox.checked;
-        };
-        label.appendChild(checkbox);
-        label.append(" " + name);
-        div.appendChild(label);
-        container.appendChild(div);
-      });
-      // 保存ボタンで localStorage に出欠状況を保存
-      document.getElementById("saveAttendance").onclick = function() {
-        localStorage.setItem(todayKey, JSON.stringify(attendance));
-        alert("出欠を保存しました");
-      };
-    }
+function showAttendance() {
+  currentInstrument = document.getElementById("instrument").value;
+  if (!members[currentInstrument]) {
+    members[currentInstrument] = [];
+  }
+  document.getElementById("instrument-select").style.display = "none";
+  document.getElementById("attendance-form").style.display = "block";
+  updateMemberList();
+}
 
-    // 管理者モード用：名前一覧のレンダリング（変更・削除ボタン付き）
-    function renderNameList() {
-      const names = loadNames();
-      const container = document.getElementById("nameList");
-      container.innerHTML = "";
-      names.forEach((name, index) => {
-        const div = document.createElement("div");
-        div.className = "name-item";
-        const span = document.createElement("span");
-        span.textContent = name;
-        const editButton = document.createElement("button");
-        editButton.textContent = "変更";
-        editButton.onclick = function() {
-          const newName = prompt("新しい名前を入力してください", name);
-          if (newName) {
-            names[index] = newName;
-            saveNames(names);
-            renderNameList();
-            renderAttendance();
-          }
-        };
-        const deleteButton = document.createElement("button");
-        deleteButton.textContent = "削除";
-        deleteButton.onclick = function() {
-          if (confirm(name + "を削除しますか？")) {
-            names.splice(index, 1);
-            saveNames(names);
-            renderNameList();
-            renderAttendance();
-          }
-        };
-        div.appendChild(span);
-        div.appendChild(editButton);
-        div.appendChild(deleteButton);
-        container.appendChild(div);
-      });
-    }
+function updateMemberList() {
+  const memberList = document.getElementById("member-list");
+  memberList.innerHTML = "";
+  members[currentInstrument].forEach(member => {
+    const li = document.createElement("li");
+    li.textContent = member;
+    memberList.appendChild(li);
+  });
+}
 
-    // 名前追加ボタンの処理
-    document.getElementById("addName").onclick = function() {
-      const newName = document.getElementById("newName").value.trim();
-      if (newName === "") {
-        alert("名前を入力してください");
-        return;
-      }
-      const names = loadNames();
-      names.push(newName);
-      saveNames(names);
-      document.getElementById("newName").value = "";
-      renderNameList();
-      renderAttendance();
-    };
+function addMember() {
+  const name = document.getElementById("new-member-name").value;
+  if (name) {
+    members[currentInstrument].push(name);
+    document.getElementById("new-member-name").value = "";
+    updateMemberList();
+    updateAdminMemberList();
+  }
+}
 
-    // 楽器選択フォームの送信処理
-    document.getElementById("instrumentForm").onsubmit = function(e) {
-      e.preventDefault();
-      const checkboxes = document.querySelectorAll("input[name='instruments']:checked");
-      if (checkboxes.length === 0) {
-        alert("少なくとも一つの楽器を選択してください");
-        return;
-      }
-      // 選択された楽器の値を取得（必要に応じて利用可能）
-      const selected = Array.from(checkboxes).map(cb => cb.value);
-      console.log("選択された楽器:", selected);
-      // 楽器選択画面を非表示にし、出欠画面を表示
-      document.getElementById("instrumentSelection").style.display = "none";
-      document.getElementById("attendanceSection").style.display = "block";
-      renderAttendance();
-    };
+function toggleAdmin() {
+  isAdmin = !isAdmin;
+  const adminPanels = document.querySelectorAll(".admin-panel");
+  adminPanels.forEach(panel => {
+    panel.style.display = isAdmin ? "block" : "none";
+  });
+  updateAdminMemberList();
+}
 
-    // 管理者モードへの切替処理
-    let isAdmin = false;
-    document.getElementById("adminToggle").onclick = function() {
-      if (!isAdmin) {
-        // 管理者でない場合はログイン画面を表示
-        document.getElementById("adminLogin").style.display = "block";
-      } else {
-        document.getElementById("adminSection").style.display = "block";
-      }
-    };
+function updateAdminMemberList() {
+    if (!isAdmin) return;
+    const adminMemberList = document.getElementById("admin-member-list");
+    adminMemberList.innerHTML = "";
+    Object.keys(members).forEach(instrument => {
+        const instrumentHeader = document.createElement("h3");
+        instrumentHeader.textContent = instrument;
+        adminMemberList.appendChild(instrumentHeader);
 
-    // 管理者ログイン処理（パスワードは "Brassband"）
-    document.getElementById("loginAdmin").onclick = function() {
-      const pass = document.getElementById("adminPassword").value;
-      if (pass === "Brassband") {
-        isAdmin = true;
-        document.getElementById("adminLogin").style.display = "none";
-        document.getElementById("adminSection").style.display = "block";
-        renderNameList();
-      } else {
-        alert("パスワードが違います");
-      }
-      document.getElementById("adminPassword").value = "";
-    };
+        members[instrument].forEach((member, index) => {
+            const li = document.createElement("li");
+            li.textContent = member;
 
-    // 管理者モード終了処理
-    document.getElementById("exitAdmin").onclick = function() {
-      isAdmin = false;
-      document.getElementById("adminSection").style.display = "none";
-    };
+            const deleteButton = document.createElement("button");
+            deleteButton.textContent = "削除";
+            deleteButton.onclick = () => {
+                members[instrument].splice(index, 1);
+                updateAdminMemberList();
+                updateMemberList();
+            };
+            li.appendChild(deleteButton);
 
-    // 初期表示設定
-    window.onload = function() {
-      document.getElementById("instrumentSelection").style.display = "block";
-      document.getElementById("attendanceSection").style.display = "none";
-      document.getElementById("adminSection").style.display = "none";
-      document.getElementById("adminLogin").style.display = "none";
-    };
-  </script>
+            const editButton = document.createElement("button");
+            editButton.textContent = "編集";
+            editButton.onclick = () => {
+                const newName = prompt("新しい部員名を入力してください", member);
+                if (newName) {
+                    members[instrument][index] = newName;
+                    updateAdminMemberList();
+                    updateMemberList();
+                }
+            };
+            li.appendChild(editButton);
+
+            adminMemberList.appendChild(li);
+        });
+    });
+}
+</script>
 </body>
 </html>
