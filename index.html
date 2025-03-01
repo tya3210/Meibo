@@ -27,7 +27,8 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
 #absentMemberListSection { text-align: left; margin-top: 20px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
 #absentMemberList { list-style-type: none; padding-left: 0; }
 #absentMemberList li { margin-bottom: 5px; }
-.instrument-label { display: inline-block; width: 60px; text-align: right; margin-right: 10px; } /* 楽器名ラベル用 */
+.instrument-label { display: none; } /* 楽器名ラベルを非表示に */
+.input-group { display: block; } /* input-groupをブロック要素として表示 */
 </style>
 </head>
 <body>
@@ -69,10 +70,6 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
         <input type="password" id="adminPassword" placeholder="管理者パスワード">
         <button onclick="checkAdminPassword()">認証</button>
         <div id="addMemberForm" style="display: none;">
-            <div class="input-group">
-                <label for="newMemberInstrument" class="instrument-label">楽器:</label>
-                <input type="text" id="newMemberInstrument" placeholder="楽器名">
-            </div>
             <div class="input-group">
                 <label for="newMemberName" class="instrument-label">名前:</label>
                 <input type="text" id="newMemberName" placeholder="新しいメンバー名">
@@ -124,12 +121,12 @@ function initializeAttendancePage() {
     loadMembers();
     loadAttendance();
     renderAttendanceTable();
-    updateInstrumentDisplay(); // 楽器名表示を更新
+    updateInstrumentDisplay();
 }
 
 function updateInstrumentDisplay() {
     const instrumentDisplaySpan = document.getElementById('selectedInstrumentDisplay');
-    instrumentDisplaySpan.textContent = `(${selectedInstrument})`; // 選択された楽器名を表示
+    instrumentDisplaySpan.textContent = `(${selectedInstrument})`;
 }
 
 
@@ -198,11 +195,11 @@ function loadMembers() {
     if (storedMembers) {
         members = JSON.parse(storedMembers);
     } else {
-        members = [  // 初期メンバーリストを更新 - 楽器情報を含む
-            { name: "メンバー1", instrument: "フルート" },
-            { name: "メンバー2", instrument: "フルート" },
-            { name: "メンバー3", instrument: "チューバ" },
-            { name: "メンバー4", instrument: "チューバ" }
+        members = [  // 初期メンバーリストを更新 - 楽器情報 **なし**
+            { name: "メンバー1" },
+            { name: "メンバー2" },
+            { name: "メンバー3" },
+            { name: "メンバー4" }
         ];
         saveMembers();
     }
@@ -223,17 +220,8 @@ function loadMemberList() {
         const listItem = document.createElement('li');
         listItem.classList.add('member-item');
 
-        // 楽器名表示・編集
-        let memberInstrumentSpan = document.createElement('span');
-        memberInstrumentSpan.textContent = `楽器: ${member.instrument}`; // 楽器名を表示
-        let editInstrumentInput = document.createElement('input');
-        editInstrumentInput.type = 'text';
-        editInstrumentInput.value = member.instrument;
-        editInstrumentInput.className = 'edit-input';
-        editInstrumentInput.style.display = 'none';
 
-
-        // メンバー名表示・編集 (既存部分)
+        // メンバー名表示・編集 (既存部分 - 楽器名関連部分を削除)
         let memberNameSpan = document.createElement('span');
         memberNameSpan.textContent = `名前: ${member.name}`; // 名前を表示
         let editInput = document.createElement('input');
@@ -248,45 +236,20 @@ function loadMemberList() {
         editButton.onclick = function() {
             memberNameSpan.style.display = 'none';
             editInput.style.display = 'inline-block';
-            memberInstrumentSpan.style.display = 'none'; // 楽器名も非表示
-            editInstrumentInput.style.display = 'inline-block'; // 楽器編集フィールドを表示
-
             editInput.focus();
         };
 
         editInput.addEventListener('blur', function() {
-            saveEdit(index, editInput.value, editInstrumentInput.value); // saveEditに楽器名も渡す
+            saveEdit(index, editInput.value); // saveEditから楽器名引数を削除
             memberNameSpan.style.display = 'inline-block';
             editInput.style.display = 'none';
-            memberInstrumentSpan.style.display = 'inline-block'; // 楽器名再表示
-            editInstrumentInput.style.display = 'none'; // 楽器編集フィールド非表示
         });
 
         editInput.addEventListener('keydown', function(event) {
             if (event.key === 'Enter') {
-                saveEdit(index, editInput.value,  editInstrumentInput.value); // saveEditに楽器名も渡す
+                saveEdit(index, editInput.value); // saveEditから楽器名引数を削除
                 memberNameSpan.style.display = 'inline-block';
                 editInput.style.display = 'none';
-                memberInstrumentSpan.style.display = 'inline-block'; // 楽器名再表示
-                editInstrumentInput.style.display = 'none'; // 楽器編集フィールド非表示
-            }
-        });
-
-        editInstrumentInput.addEventListener('blur', function() { // 楽器編集フィールドのblurイベント
-             saveEdit(index, editInput.value, editInstrumentInput.value); // saveEditに楽器名も渡す
-            memberInstrumentSpan.style.display = 'inline-block';
-            editInstrumentInput.style.display = 'none';
-            memberNameSpan.style.display = 'inline-block'; // メンバー名再表示
-            editInput.style.display = 'none'; // メンバー名編集フィールド非表示
-        });
-
-        editInstrumentInput.addEventListener('keydown', function(event) { // 楽器編集フィールドのkeydownイベント
-            if (event.key === 'Enter') {
-                 saveEdit(index, editInput.value,  editInstrumentInput.value); // saveEditに楽器名も渡す
-                memberInstrumentSpan.style.display = 'inline-block';
-                editInstrumentInput.style.display = 'none';
-                memberNameSpan.style.display = 'inline-block'; // メンバー名再表示
-                editInput.style.display = 'none'; // メンバー名編集フィールド非表示
             }
         });
 
@@ -297,26 +260,24 @@ function loadMemberList() {
 
         listItem.appendChild(memberNameSpan);
         listItem.appendChild(editInput);
-        listItem.appendChild(memberInstrumentSpan); // 楽器名表示
-        listItem.appendChild(editInstrumentInput); // 楽器名編集フィールド
         listItem.appendChild(deleteButton);
         memberListUl.appendChild(listItem);
     });
 }
 
-function saveEdit(index, newName, newInstrument) { // 引数にnewInstrumentを追加
+function saveEdit(index, newName) { // 楽器名引数を削除
     if (!adminMode) {
         alert('管理者モードでのみ編集可能です。');
         return;
     }
-    if (newName.trim() && newInstrument.trim() && !members.some((m, i) => m.name === newName.trim() && i !== index )) {
-        members[index] = { name: newName.trim(), instrument: newInstrument.trim() }; // 楽器名も保存
+    if (newName.trim() && !members.some((m, i) => m.name === newName.trim() && i !== index )) {
+        members[index] = { name: newName.trim() }; // 楽器名を保存しない
         saveMembers();
         loadMemberList();
         renderAttendanceTable();
         alert('メンバー情報を変更しました。'); // メッセージを更新
-    } else if (!newName.trim() || !newInstrument.trim()) {
-        alert('メンバー名と楽器名を入力してください。'); // アラートメッセージを修正
+    } else if (!newName.trim()) {
+        alert('メンバー名を入力してください。'); // アラートメッセージを修正
         loadMemberList();
     } else if (members.some((m, i) => m.name === newName.trim() && i !== index )) {
         alert('そのメンバー名は既に登録されています。');
@@ -331,22 +292,17 @@ function addMember() {
         return;
     }
     const newMemberNameInput = document.getElementById('newMemberName');
-    const newMemberInstrumentInput = document.getElementById('newMemberInstrument'); // 楽器名入力欄を取得
     const newMemberName = newMemberNameInput.value.trim();
-    const newMemberInstrument = newMemberInstrumentInput.value.trim(); // 楽器名を取得
 
-    if (newMemberName && newMemberInstrument && !members.some(m => m.name === newMemberName)) { // 楽器名が空でないこともチェック
-        members.push({ name: newMemberName, instrument: newMemberInstrument }); // メンバーオブジェクトに楽器名も追加
+    if (newMemberName && !members.some(m => m.name === newMemberName)) { // 楽器名関連のチェックを削除
+        members.push({ name: newMemberName }); // メンバーオブジェクトに楽器名を追加しない
         newMemberNameInput.value = '';
-        newMemberInstrumentInput.value = ''; // 楽器名入力欄もクリア
         saveMembers();
         loadMemberList();
         renderAttendanceTable();
-        alert(newMemberName + ' さんを' + newMemberInstrument + 'パートとして追加しました。'); // メッセージを更新
+        alert(newMemberName + ' さんを追加しました。'); // メッセージを更新 - 楽器名部分を削除
     } else if (!newMemberName) {
         alert('メンバー名を入力してください。');
-    } else if (!newMemberInstrument) { // 楽器名が空の場合のアラート
-        alert('楽器名を入力してください。');
     }
      else if (members.some(m => m.name === newMemberName)) {
         alert('そのメンバーは既に登録されています。');
@@ -393,9 +349,11 @@ function renderAttendanceTable() {
     const tableBody = document.getElementById('attendanceTableBody');
     tableBody.innerHTML = '';
 
-    const filteredMembers = members.filter(member => member.instrument === selectedInstrument); // 楽器でメンバーをフィルタリング
+    const filteredMembers = members.filter(member => member.instrument === selectedInstrument); // 楽器フィルタリングを削除 **常に全メンバーを表示**
+    const membersToShow = selectedInstrument ? filteredMembers : members; // 楽器選択時はフィルタリング、未選択時は全メンバーを表示  **常に全メンバーを表示するように修正**
+    const membersToRender = members; // **renderするメンバーリストを常に全メンバーに変更**
 
-    filteredMembers.forEach((member, index) => { // フィルタリングされたメンバーでループ
+    membersToRender.forEach((member, index) => { // フィルタリング **ではなく** 全メンバーでループ
         const row = tableBody.insertRow();
         const nameCell = row.insertCell(0);
         const presentCell = row.insertCell(1);
@@ -405,21 +363,20 @@ function renderAttendanceTable() {
 
         const presentRadio = document.createElement('input');
         presentRadio.type = 'radio';
-        presentRadio.name = `attendance_${index}`; // indexはfilteredMembersのindex
+        presentRadio.name = `attendance_${index}`; // indexは **元の** members配列のindexを使用
         presentRadio.value = 'present';
         presentRadio.classList.add('attendance-checkbox');
 
-        // attendanceDataは元のmembers配列に基づいているため、indexを調整
-        const originalIndex = members.findIndex(m => m.name === member.name && m.instrument === member.instrument);
-        presentRadio.checked = attendanceData[originalIndex]?.present === true; // originalIndexを使用
+
+        presentRadio.checked = attendanceData[index]?.present === true;
         presentCell.appendChild(presentRadio);
 
         const absentRadio = document.createElement('input');
         absentRadio.type = 'radio';
-        absentRadio.name = `attendance_${index}`; // indexはfilteredMembersのindex
+        absentRadio.name = `attendance_${index}`; // indexは **元の** members配列のindexを使用
         absentRadio.value = 'absent';
         absentRadio.classList.add('attendance-checkbox');
-        absentRadio.checked = attendanceData[originalIndex]?.present === false; // originalIndexを使用
+        absentRadio.checked = attendanceData[index]?.present === false;
         absentCell.appendChild(absentRadio);
     });
 }
@@ -427,9 +384,11 @@ function renderAttendanceTable() {
 
 function updateAttendance() {
     const today = getFormattedDate();
-    const filteredMembers = members.filter(member => member.instrument === selectedInstrument); // フィルタリングされたメンバーリストを取得
-    const updatedAttendanceData = filteredMembers.map((member, index) => { // フィルタリングされたメンバーリストに基づいて出欠データを生成
-        const radioNodes = document.querySelectorAll(`input[name="attendance_${index}"]`); // name属性はfilteredMembersのindexに基づいている
+    // const filteredMembers = members.filter(member => member.instrument === selectedInstrument); // 楽器フィルタリングを削除 **全メンバーを対象とする**
+    // const membersToUpdateAttendance = selectedInstrument ? filteredMembers : members; // 楽器選択時はフィルタリング、未選択時は全メンバー **常に全メンバーを対象とするように修正**
+    const membersToUpdateAttendance = members; // **出欠更新対象を常に全メンバーに変更**
+    const updatedAttendanceData = membersToUpdateAttendance.map((member, index) => { // 出欠データ生成は **全メンバー** に基づく
+        const radioNodes = document.querySelectorAll(`input[name="attendance_${index}"]`); // name属性は **元の** members配列のindexに基づいている
         let isPresent = false;
         radioNodes.forEach(radio => {
             if (radio.value === 'present' && radio.checked) {
@@ -439,9 +398,9 @@ function updateAttendance() {
         return { present: isPresent };
     });
 
-    // 元のattendanceDataを更新 - filteredMembersに基づいて、対応するメンバーの出欠データを更新
-    filteredMembers.forEach((member, index) => {
-        const originalIndex = members.findIndex(m => m.name === member.name && m.instrument === member.instrument);
+    // 元のattendanceDataを更新 -  **全メンバー** に基づいて、対応するメンバーの出欠データを更新
+    membersToUpdateAttendance.forEach((member, index) => {
+        const originalIndex = members.findIndex(m => m.name === member.name); // 楽器名による絞り込みを削除
         if (originalIndex !== -1) {
             attendanceData[originalIndex] = updatedAttendanceData[index]; // originalIndexを使用して更新
         }
