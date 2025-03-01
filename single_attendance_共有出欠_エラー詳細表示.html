@@ -144,8 +144,8 @@ let attendanceData = [];
 let selectedInstrument = "";
 
 // ★★★ Google スプレッドシートの設定 ★★★
-const spreadsheetId = '1-9vzH62F21Kvqr4b6xCbiqPJuVIpp3hLjxie6vDb6A8/edit'; // ★★★ スプレッドシートIDを入力 ★★★
-const apiKey = 'AIzaSyCSmweNEW46tmbeTiZ1DYnMHZ3LL2qPxn8'; // ★★★ Google APIキーを入力 ★★★
+const spreadsheetId = 'ここにあなたのスプレッドシートIDを入力してください'; // ★★★ スプレッドシートIDを入力 ★★★
+const apiKey = 'ここにあなたのGoogle APIキーを入力してください'; // ★★★ Google APIキーを入力 ★★★
 const sheetName = '出欠データ'; // シート名
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -258,7 +258,7 @@ async function loadSharedData() {
         updateAbsentMemberList(); // 欠席者リストを更新
     } catch (error) {
         console.error('データ読み込みエラー:', error); // ★詳細なエラー内容をコンソールに出力
-        alert('データの読み込みに失敗しました。');
+        alert('データの読み込みに失敗しました。\n\n詳細: ' + error.message); // ★エラーメッセージをアラート表示 (詳細版)
         members = []; // エラー発生時も空のメンバーリストで初期化
         initializeAttendanceForToday(); // エラー発生時も今日の日付で初期化
         loadMemberList();
@@ -281,7 +281,7 @@ async function saveSharedData() {
         alert('データを共有サーバーに保存しました。');
     } catch (error) {
         console.error('データ保存エラー:', error); // ★詳細なエラー内容をコンソールに出力
-        alert('データの保存に失敗しました。');
+        alert('データの保存に失敗しました。\n\n詳細: ' + error.message); // ★エラーメッセージをアラート表示 (詳細版)
     } finally {
         hideLoading();
     }
@@ -301,9 +301,9 @@ async function fetchGoogleSheetData() {
     try {
         const response = await fetch(url);
         console.log('APIレスポンス:', response); // ★APIレスポンス全体をコンソールに出力
-        if (!response.ok) {
-            const message = `HTTP error! status: ${response.status}, statusText: ${response.statusText}`;
-            console.error('APIエラーレスポンス:', message); // ★詳細なAPIエラーレスポンスをコンソールに出力
+        if (!response.ok) { // ★response.ok が false の場合のエラー処理を追加
+            const message = `HTTPエラーが発生しました。ステータスコード: ${response.status}, ステータステキスト: ${response.statusText}`;
+            alert(message); // ★エラーメッセージをアラート表示
             throw new Error(message);
         }
         const json = await response.json();
@@ -311,6 +311,7 @@ async function fetchGoogleSheetData() {
         return parseSheetData(json.values);
     } catch (error) {
         console.error('Google Sheets API エラー:', error);
+        alert('データの読み込みに失敗しました。\n\n詳細: ' + error.message); // ★エラーメッセージをアラート表示 (詳細版)
         throw error; // エラーをthrowして上位でキャッチ
     }
 }
@@ -341,9 +342,9 @@ async function updateGoogleSheetData(data) {
     try {
         const response = await fetch(url, options);
         console.log('API PUTレスポンス:', response); // ★API PUTレスポンス全体をコンソールに出力
-        if (!response.ok) {
-            const message = `HTTP error! status: ${response.status}, statusText: ${response.statusText}`;
-            console.error('API PUTエラーレスポンス:', message); // ★詳細なAPI PUTエラーレスポンスをコンソールに出力
+        if (!response.ok) { // ★response.ok が false の場合のエラー処理を追加
+            const message = `HTTPエラーが発生しました。ステータスコード: ${response.status}, ステータステキスト: ${response.statusText}`;
+            alert(message); // ★エラーメッセージをアラート表示
             throw new Error(message);
         }
         const jsonResponse = await response.json();
@@ -351,6 +352,7 @@ async function updateGoogleSheetData(data) {
         return jsonResponse;
     } catch (error) {
         console.error('Google Sheets API 更新エラー:', error);
+        alert('データの保存に失敗しました。\n\n詳細: ' + error.message); // ★エラーメッセージをアラート表示 (詳細版)
         throw error; // エラーをthrowして上位でキャッチ
     }
 }
