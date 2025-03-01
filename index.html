@@ -15,11 +15,13 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
 #addMemberSection h2 { margin-top: 0; }
 #addMemberSection input[type="text"], #addMemberSection input[type="password"] { width: calc(100% - 22px); padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; }
 .attendance-checkbox { transform: scale(1.5); }
-#instrumentSection { margin-bottom: 20px; text-align: center; } /* 楽器選択セクションのスタイル */
-#attendanceSection { display: none; } /* 出席セクションを初期非表示 */
+#instrumentSection { margin-bottom: 20px; text-align: center; }
+#attendanceSection { display: none; }
 .member-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
 .member-item button { margin-left: 10px; }
-.edit-input { width: calc(60% - 20px); padding: 8px; border: 1px solid #ccc; } /* 編集用インプット */
+.edit-input { width: calc(60% - 20px); padding: 8px; border: 1px solid #ccc; }
+#memberList { margin-bottom: 15px; }
+#memberList li { margin-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -54,7 +56,7 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
         <div id="addMemberForm" style="display: none;">
             <input type="text" id="newMemberName" placeholder="新しいメンバー名">
             <button onclick="addMember()">メンバー追加</button>
-            <ul id="memberList"></ul> <br>
+            <ul id="memberList"></ul>
             <button onclick="saveMembers()">メンバーリストを保存</button>
         </div>
     </div>
@@ -84,22 +86,28 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
 </div>
 
 <script>
-const adminPass = "Brassband"; // ★★★ 管理者パスワードを変更 ★★★
+const adminPass = "Brassband";
 let adminMode = false;
 let members = [];
 let attendanceData = [];
-let selectedInstrument = ""; // 選択された楽器を保持
+let selectedInstrument = "";
 
 document.addEventListener('DOMContentLoaded', function() {
-    loadInstrumentPreference(); // 楽器選択のプリファレンスをロード
-    if (!selectedInstrument) {
-        document.getElementById('instrumentSection').style.display = 'block'; // 楽器選択セクションを表示
-        document.getElementById('attendanceSection').style.display = 'none'; // 出席セクションを非表示
-    } else {
-        document.getElementById('instrumentSection').style.display = 'none'; // 楽器選択セクションを非表示
-        document.getElementById('attendanceSection').style.display = 'block'; // 出席セクションを表示
-        initializeAttendancePage(); // 出席ページの初期化処理
-    }
+    // 楽器選択画面を常に表示するように変更
+    document.getElementById('instrumentSection').style.display = 'block';
+    document.getElementById('attendanceSection').style.display = 'none';
+    // 楽器選択プリファレンスのロード処理は削除 (不要になったため)
+    // loadInstrumentPreference(); // 不要になったため削除
+
+    //  以下のコードは、楽器選択後に実行される初期化処理 (楽器選択前には実行されない)
+    // if (!selectedInstrument) { // 不要になったため削除。常に楽器選択画面を表示するため
+    //     document.getElementById('instrumentSection').style.display = 'block';
+    //     document.getElementById('attendanceSection').style.display = 'none';
+    // } else {
+    //     document.getElementById('instrumentSection').style.display = 'none';
+    //     document.getElementById('attendanceSection').style.display = 'block';
+    //     initializeAttendancePage();
+    // }
 });
 
 function initializeAttendancePage() {
@@ -123,9 +131,9 @@ function selectInstrument() {
     selectedInstrument = instrumentSelect.value;
     if (selectedInstrument) {
         saveInstrumentPreference();
-        document.getElementById('instrumentSection').style.display = 'none'; // 楽器選択セクションを非表示
-        document.getElementById('attendanceSection').style.display = 'block'; // 出席セクションを表示
-        initializeAttendancePage(); // 出席ページの初期化処理
+        document.getElementById('instrumentSection').style.display = 'none';
+        document.getElementById('attendanceSection').style.display = 'block';
+        initializeAttendancePage();
     } else {
         alert('楽器を選択してください。');
     }
@@ -168,7 +176,7 @@ function loadMembers() {
     if (storedMembers) {
         members = JSON.parse(storedMembers);
     } else {
-        members = ["メンバー１", "メンバー２", "メンバー３"]; // 初期メンバー例
+        members = [];
         saveMembers();
     }
 }
@@ -176,6 +184,14 @@ function loadMembers() {
 function loadMemberList() {
     const memberListUl = document.getElementById('memberList');
     memberListUl.innerHTML = '';
+
+    if (members.length === 0) {
+        const listItem = document.createElement('li');
+        listItem.textContent = 'メンバーはまだ登録されていません。下のフォームから追加してください。';
+        memberListUl.appendChild(listItem);
+        return;
+    }
+
     members.forEach((member, index) => {
         const listItem = document.createElement('li');
         listItem.classList.add('member-item');
@@ -184,7 +200,7 @@ function loadMemberList() {
         editInput.type = 'text';
         editInput.value = member;
         editInput.className = 'edit-input';
-        editInput.style.display = 'none'; // 最初は非表示
+        editInput.style.display = 'none';
 
         let memberNameSpan = document.createElement('span');
         memberNameSpan.textContent = member;
@@ -197,13 +213,13 @@ function loadMemberList() {
             editInput.focus();
         };
 
-        editInput.addEventListener('blur', function() { // フォーカスが外れたら
+        editInput.addEventListener('blur', function() {
             saveEdit(index, editInput.value);
             memberNameSpan.style.display = 'inline-block';
             editInput.style.display = 'none';
         });
 
-        editInput.addEventListener('keydown', function(event) { // Enterキーで確定
+        editInput.addEventListener('keydown', function(event) {
             if (event.key === 'Enter') {
                 saveEdit(index, editInput.value);
                 memberNameSpan.style.display = 'inline-block';
@@ -218,7 +234,7 @@ function loadMemberList() {
 
         listItem.appendChild(memberNameSpan);
         listItem.appendChild(editInput);
-        listItem.appendChild(editButton);
+        listItem.appendChild(deleteButton);
         memberListUl.appendChild(listItem);
     });
 }
@@ -231,15 +247,15 @@ function saveEdit(index, newName) {
     if (newName.trim() && !members.includes(newName.trim())) {
         members[index] = newName.trim();
         saveMembers();
-        loadMemberList(); // リスト再描画
-        renderAttendanceTable(); // 出席テーブル再描画
+        loadMemberList();
+        renderAttendanceTable();
         alert('メンバー名を変更しました。');
     } else if (!newName.trim()) {
         alert('メンバー名を入力してください。');
-        loadMemberList(); // リスト再描画 (編集キャンセル)
+        loadMemberList();
     } else if (members.includes(newName.trim())) {
         alert('そのメンバー名は既に登録されています。');
-        loadMemberList(); // リスト再描画 (編集キャンセル)
+        loadMemberList();
     }
 }
 
