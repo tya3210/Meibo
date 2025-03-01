@@ -14,57 +14,123 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
 #addMemberSection { display: none; margin-bottom: 20px; border: 1px solid #ccc; padding: 15px; }
 #addMemberSection h2 { margin-top: 0; }
 #addMemberSection input[type="text"], #addMemberSection input[type="password"] { width: calc(100% - 22px); padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; }
-.attendance-checkbox { transform: scale(1.5); /* チェックボックスを大きく */ }
+.attendance-checkbox { transform: scale(1.5); }
+#instrumentSection { margin-bottom: 20px; text-align: center; } /* 楽器選択セクションのスタイル */
+#attendanceSection { display: none; } /* 出席セクションを初期非表示 */
+.member-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.member-item button { margin-left: 10px; }
+.edit-input { width: calc(60% - 20px); padding: 8px; border: 1px solid #ccc; } /* 編集用インプット */
 </style>
 </head>
 <body>
 
 <h1>[あなたの部活動名] 出欠管理</h1>
 
-<div id="addMemberSection">
-    <h2>メンバー追加・編集 (管理者用)</h2>
-    <input type="password" id="adminPassword" placeholder="管理者パスワード">
-    <button onclick="checkAdminPassword()">認証</button>
-    <div id="addMemberForm" style="display: none;">
-        <input type="text" id="newMemberName" placeholder="新しいメンバー名">
-        <button onclick="addMember()">メンバー追加</button>
-        <ul id="memberList"></ul> <br>
-        <button onclick="saveMembers()">メンバーリストを保存</button>
+<div id="instrumentSection">
+    <h2>楽器を選択してください</h2>
+    <select id="instrumentSelect">
+        <option value="">楽器を選択</option>
+        <option value="フルート">フルート</option>
+        <option value="クラリネット">クラリネット</option>
+        <option value="オーボエ">オーボエ</option>
+        <option value="サックス">サックス</option>
+        <option value="トランペット">トランペット</option>
+        <option value="ホルン">ホルン</option>
+        <option value="トロンボーン">トロンボーン</option>
+        <option value="ユーフォニアム">ユーフォニアム</option>
+        <option value="コントラバス">コントラバス</option>
+        <option value="チューバ">チューバ</option>
+        <option value="パーカッション">パーカッション</option>
+    </select>
+    <button onclick="selectInstrument()">決定</button>
+</div>
+
+<div id="attendanceSection">
+
+    <div id="addMemberSection">
+        <h2>メンバー追加・編集 (管理者用)</h2>
+        <input type="password" id="adminPassword" placeholder="管理者パスワード">
+        <button onclick="checkAdminPassword()">認証</button>
+        <div id="addMemberForm" style="display: none;">
+            <input type="text" id="newMemberName" placeholder="新しいメンバー名">
+            <button onclick="addMember()">メンバー追加</button>
+            <ul id="memberList"></ul> <br>
+            <button onclick="saveMembers()">メンバーリストを保存</button>
+        </div>
     </div>
-</div>
 
-<div class="button-container">
-    <button onclick="toggleAddMemberSection()">メンバー追加・編集</button>
-</div>
+    <div class="button-container">
+        <button onclick="toggleAddMemberSection()">メンバー追加・編集</button>
+    </div>
 
-<h2>出欠状況 (本日: <span id="todayDate"></span>)</h2>
+    <h2>出欠状況 (本日: <span id="todayDate"></span>)</h2>
 
-<table id="attendanceTable">
-    <thead>
-        <tr>
-            <th>名前</th>
-            <th>出席</th>
-            <th>欠席</th>
-        </tr>
-    </thead>
-    <tbody id="attendanceTableBody">
-        </tbody>
-</table>
+    <table id="attendanceTable">
+        <thead>
+            <tr>
+                <th>名前</th>
+                <th>出席</th>
+                <th>欠席</th>
+            </tr>
+        </thead>
+        <tbody id="attendanceTableBody">
+            </tbody>
+    </table>
 
-<div class="button-container">
-    <button onclick="updateAttendance()">出欠を更新</button>
+    <div class="button-container">
+        <button onclick="updateAttendance()">出欠を更新</button>
+    </div>
+
 </div>
 
 <script>
-const adminPass = "admin123"; // ★★★ 管理者パスワード ★★★  <- 必要に応じて変更してください。
-let adminMode = false; // 管理者モードの状態を保持
+const adminPass = "Brassband"; // ★★★ 管理者パスワードを変更 ★★★
+let adminMode = false;
+let members = [];
+let attendanceData = [];
+let selectedInstrument = ""; // 選択された楽器を保持
 
 document.addEventListener('DOMContentLoaded', function() {
+    loadInstrumentPreference(); // 楽器選択のプリファレンスをロード
+    if (!selectedInstrument) {
+        document.getElementById('instrumentSection').style.display = 'block'; // 楽器選択セクションを表示
+        document.getElementById('attendanceSection').style.display = 'none'; // 出席セクションを非表示
+    } else {
+        document.getElementById('instrumentSection').style.display = 'none'; // 楽器選択セクションを非表示
+        document.getElementById('attendanceSection').style.display = 'block'; // 出席セクションを表示
+        initializeAttendancePage(); // 出席ページの初期化処理
+    }
+});
+
+function initializeAttendancePage() {
     updateTodayDate();
     loadMembers();
     loadAttendance();
     renderAttendanceTable();
-});
+}
+
+
+function loadInstrumentPreference() {
+    selectedInstrument = localStorage.getItem('selectedInstrument');
+}
+
+function saveInstrumentPreference() {
+    localStorage.setItem('selectedInstrument', selectedInstrument);
+}
+
+function selectInstrument() {
+    const instrumentSelect = document.getElementById('instrumentSelect');
+    selectedInstrument = instrumentSelect.value;
+    if (selectedInstrument) {
+        saveInstrumentPreference();
+        document.getElementById('instrumentSection').style.display = 'none'; // 楽器選択セクションを非表示
+        document.getElementById('attendanceSection').style.display = 'block'; // 出席セクションを表示
+        initializeAttendancePage(); // 出席ページの初期化処理
+    } else {
+        alert('楽器を選択してください。');
+    }
+}
+
 
 function updateTodayDate() {
     const todaySpan = document.getElementById('todayDate');
@@ -77,7 +143,7 @@ function toggleAddMemberSection() {
     const section = document.getElementById('addMemberSection');
     section.style.display = section.style.display === 'none' ? 'block' : 'none';
     const form = document.getElementById('addMemberForm');
-    form.style.display = 'none'; // メンバー追加フォームも非表示にする
+    form.style.display = 'none';
 }
 
 function checkAdminPassword() {
@@ -85,42 +151,96 @@ function checkAdminPassword() {
     const form = document.getElementById('addMemberForm');
     if (passwordInput.value === adminPass) {
         form.style.display = 'block';
-        loadMemberList(); // メンバーリストをロード
-        passwordInput.value = ''; // パスワード入力欄をクリア
+        loadMemberList();
+        passwordInput.value = '';
         alert('管理者モードになりました。');
-        adminMode = true; // 管理者モードON
+        adminMode = true;
     } else {
         alert('パスワードが違います。');
-        form.style.display = 'none'; // フォームを非表示に戻す
-        adminMode = false; // 管理者モードOFF
+        form.style.display = 'none';
+        adminMode = false;
     }
 }
 
-
-let members = []; // メンバーリストを保存する配列
 
 function loadMembers() {
     const storedMembers = localStorage.getItem('members');
     if (storedMembers) {
         members = JSON.parse(storedMembers);
     } else {
-        members = ["メンバー１", "メンバー２", "メンバー３"]; // 初期メンバーの例
-        saveMembers(); // 初期メンバーリストを保存
+        members = ["メンバー１", "メンバー２", "メンバー３"]; // 初期メンバー例
+        saveMembers();
     }
 }
 
-function loadMemberList() { // 管理者画面用のメンバーリスト表示
+function loadMemberList() {
     const memberListUl = document.getElementById('memberList');
-    memberListUl.innerHTML = ''; // リストをクリア
+    memberListUl.innerHTML = '';
     members.forEach((member, index) => {
         const listItem = document.createElement('li');
-        listItem.textContent = member;
-        const deleteButton = document.createElement('button');
+        listItem.classList.add('member-item');
+
+        let editInput = document.createElement('input');
+        editInput.type = 'text';
+        editInput.value = member;
+        editInput.className = 'edit-input';
+        editInput.style.display = 'none'; // 最初は非表示
+
+        let memberNameSpan = document.createElement('span');
+        memberNameSpan.textContent = member;
+
+        let editButton = document.createElement('button');
+        editButton.textContent = '編集';
+        editButton.onclick = function() {
+            memberNameSpan.style.display = 'none';
+            editInput.style.display = 'inline-block';
+            editInput.focus();
+        };
+
+        editInput.addEventListener('blur', function() { // フォーカスが外れたら
+            saveEdit(index, editInput.value);
+            memberNameSpan.style.display = 'inline-block';
+            editInput.style.display = 'none';
+        });
+
+        editInput.addEventListener('keydown', function(event) { // Enterキーで確定
+            if (event.key === 'Enter') {
+                saveEdit(index, editInput.value);
+                memberNameSpan.style.display = 'inline-block';
+                editInput.style.display = 'none';
+            }
+        });
+
+
+        let deleteButton = document.createElement('button');
         deleteButton.textContent = '削除';
         deleteButton.onclick = function() { deleteMember(index); };
-        listItem.appendChild(deleteButton);
+
+        listItem.appendChild(memberNameSpan);
+        listItem.appendChild(editInput);
+        listItem.appendChild(editButton);
         memberListUl.appendChild(listItem);
     });
+}
+
+function saveEdit(index, newName) {
+    if (!adminMode) {
+        alert('管理者モードでのみ編集可能です。');
+        return;
+    }
+    if (newName.trim() && !members.includes(newName.trim())) {
+        members[index] = newName.trim();
+        saveMembers();
+        loadMemberList(); // リスト再描画
+        renderAttendanceTable(); // 出席テーブル再描画
+        alert('メンバー名を変更しました。');
+    } else if (!newName.trim()) {
+        alert('メンバー名を入力してください。');
+        loadMemberList(); // リスト再描画 (編集キャンセル)
+    } else if (members.includes(newName.trim())) {
+        alert('そのメンバー名は既に登録されています。');
+        loadMemberList(); // リスト再描画 (編集キャンセル)
+    }
 }
 
 
@@ -131,12 +251,12 @@ function addMember() {
     }
     const newMemberNameInput = document.getElementById('newMemberName');
     const newMemberName = newMemberNameInput.value.trim();
-    if (newMemberName && !members.includes(newMemberName)) { // 空でない、かつ重複しない場合のみ追加
+    if (newMemberName && !members.includes(newMemberName)) {
         members.push(newMemberName);
-        newMemberNameInput.value = ''; // 入力欄をクリア
-        saveMembers(); // メンバーリストを保存
-        loadMemberList(); // メンバーリストを再表示
-        renderAttendanceTable(); // 出席テーブルを再描画
+        newMemberNameInput.value = '';
+        saveMembers();
+        loadMemberList();
+        renderAttendanceTable();
         alert(newMemberName + ' さんを追加しました。');
     } else if (!newMemberName) {
         alert('メンバー名を入力してください。');
@@ -151,10 +271,10 @@ function deleteMember(index) {
         return;
     }
     if (confirm(members[index] + ' さんを削除してもよろしいですか？')) {
-        members.splice(index, 1); // メンバーを削除
-        saveMembers(); // メンバーリストを保存
-        loadMemberList(); // メンバーリストを再表示
-        renderAttendanceTable(); // 出席テーブルを再描画
+        members.splice(index, 1);
+        saveMembers();
+        loadMemberList();
+        renderAttendanceTable();
         alert('メンバーを削除しました。');
     }
 }
@@ -169,7 +289,6 @@ function loadAttendance() {
     const today = getFormattedDate();
     const storedAttendance = localStorage.getItem('attendance_' + today);
     if (!storedAttendance) {
-        // 今日の出欠データがなければ初期化
         initializeAttendanceForToday();
         return;
     }
@@ -177,16 +296,14 @@ function loadAttendance() {
 }
 
 function initializeAttendanceForToday() {
-    attendanceData = members.map(() => ({ present: false })); // デフォルトは全員「欠席」
-    saveAttendance(); // 初期状態を保存
+    attendanceData = members.map(() => ({ present: false }));
+    saveAttendance();
 }
 
 
-let attendanceData = []; // 出席データを保存する配列
-
 function renderAttendanceTable() {
     const tableBody = document.getElementById('attendanceTableBody');
-    tableBody.innerHTML = ''; // テーブル内容をクリア
+    tableBody.innerHTML = '';
 
     members.forEach((member, index) => {
         const row = tableBody.insertRow();
@@ -196,21 +313,19 @@ function renderAttendanceTable() {
 
         nameCell.textContent = member;
 
-        // 出席ラジオボタン
         const presentRadio = document.createElement('input');
         presentRadio.type = 'radio';
         presentRadio.name = `attendance_${index}`;
         presentRadio.value = 'present';
-        presentRadio.classList.add('attendance-checkbox'); // クラスを追加
+        presentRadio.classList.add('attendance-checkbox');
         presentRadio.checked = attendanceData[index]?.present === true;
         presentCell.appendChild(presentRadio);
 
-        // 欠席ラジオボタン
         const absentRadio = document.createElement('input');
         absentRadio.type = 'radio';
         absentRadio.name = `attendance_${index}`;
         absentRadio.value = 'absent';
-        absentRadio.classList.add('attendance-checkbox'); // クラスを追加
+        absentRadio.classList.add('attendance-checkbox');
         absentRadio.checked = attendanceData[index]?.present === false;
         absentCell.appendChild(absentRadio);
     });
@@ -243,7 +358,7 @@ function getFormattedDate() {
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`; // YYYY-MM-DD形式
+    return `${year}-${month}-${day}`;
 }
 
 
