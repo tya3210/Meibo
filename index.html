@@ -22,6 +22,9 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
 .edit-input { width: calc(60% - 20px); padding: 8px; border: 1px solid #ccc; }
 #memberList { margin-bottom: 15px; }
 #memberList li { margin-bottom: 8px; }
+#absentMemberListSection { text-align: left; margin-top: 20px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; } /* 欠席者リストセクション */
+#absentMemberList { list-style-type: none; padding-left: 0; } /* 欠席者リスト */
+#absentMemberList li { margin-bottom: 5px; } /* 欠席者リスト項目 */
 </style>
 </head>
 <body>
@@ -45,9 +48,19 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
         <option value="パーカッション">パーカッション</option>
     </select>
     <button onclick="selectInstrument()">決定</button>
+
+    <div id="absentMemberListSection">
+        <h2>欠席者</h2>
+        <ul id="absentMemberList">
+            </ul>
+    </div>
 </div>
 
 <div id="attendanceSection">
+
+    <div class="button-container">
+        <button onclick="goToInstrumentSection()">楽器選択に戻る</button>
+    </div>
 
     <div id="addMemberSection">
         <h2>メンバー追加・編集 (管理者用)</h2>
@@ -93,21 +106,8 @@ let attendanceData = [];
 let selectedInstrument = "";
 
 document.addEventListener('DOMContentLoaded', function() {
-    // 楽器選択画面を常に表示するように変更
     document.getElementById('instrumentSection').style.display = 'block';
     document.getElementById('attendanceSection').style.display = 'none';
-    // 楽器選択プリファレンスのロード処理は削除 (不要になったため)
-    // loadInstrumentPreference(); // 不要になったため削除
-
-    //  以下のコードは、楽器選択後に実行される初期化処理 (楽器選択前には実行されない)
-    // if (!selectedInstrument) { // 不要になったため削除。常に楽器選択画面を表示するため
-    //     document.getElementById('instrumentSection').style.display = 'block';
-    //     document.getElementById('attendanceSection').style.display = 'none';
-    // } else {
-    //     document.getElementById('instrumentSection').style.display = 'none';
-    //     document.getElementById('attendanceSection').style.display = 'block';
-    //     initializeAttendancePage();
-    // }
 });
 
 function initializeAttendancePage() {
@@ -134,9 +134,16 @@ function selectInstrument() {
         document.getElementById('instrumentSection').style.display = 'none';
         document.getElementById('attendanceSection').style.display = 'block';
         initializeAttendancePage();
+        updateAbsentMemberList(); // 楽器選択後に欠席者リストを更新
     } else {
         alert('楽器を選択してください。');
     }
+}
+
+function goToInstrumentSection() {
+    document.getElementById('instrumentSection').style.display = 'block';
+    document.getElementById('attendanceSection').style.display = 'none';
+    updateAbsentMemberList(); // 楽器選択画面に戻るときにも欠席者リストを更新 (最新の情報にするため)
 }
 
 
@@ -361,6 +368,7 @@ function updateAttendance() {
         return { present: isPresent };
     });
     saveAttendance();
+    updateAbsentMemberList(); // 出席更新後に欠席者リストを更新
     alert('出欠状況を更新しました。');
 }
 
@@ -375,6 +383,31 @@ function getFormattedDate() {
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+}
+
+function updateAbsentMemberList() {
+    const absentMemberListUl = document.getElementById('absentMemberList');
+    absentMemberListUl.innerHTML = ''; // リストをクリア
+    let absentMembers = [];
+
+    loadAttendance(); // 最新の出欠データをロード (念のため)
+
+    members.forEach((memberName, index) => {
+        if (attendanceData[index] && attendanceData[index].present === false) { // 欠席の場合
+            absentMembers.push(memberName);
+        }
+    });
+
+    if (absentMembers.length > 0) {
+        absentMembers.forEach(memberName => {
+            const listItem = document.createElement('li');
+            listItem.textContent = memberName;
+            absentMemberListUl.appendChild(listItem);
+        });
+        document.getElementById('absentMemberListSection').style.display = 'block'; // 欠席者がいる場合のみセクションを表示
+    } else {
+        document.getElementById('absentMemberListSection').style.display = 'none'; // 欠席者がいない場合はセクションを非表示
+    }
 }
 
 
