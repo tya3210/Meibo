@@ -257,7 +257,7 @@ async function loadSharedData() {
         renderAttendanceTable(); // 出欠テーブルをレンダリング
         updateAbsentMemberList(); // 欠席者リストを更新
     } catch (error) {
-        console.error('データ読み込みエラー:', error);
+        console.error('データ読み込みエラー:', error); // ★詳細なエラー内容をコンソールに出力
         alert('データの読み込みに失敗しました。');
         members = []; // エラー発生時も空のメンバーリストで初期化
         initializeAttendanceForToday(); // エラー発生時も今日の日付で初期化
@@ -280,7 +280,7 @@ async function saveSharedData() {
         await updateGoogleSheetData(dataToSave);
         alert('データを共有サーバーに保存しました。');
     } catch (error) {
-        console.error('データ保存エラー:', error);
+        console.error('データ保存エラー:', error); // ★詳細なエラー内容をコンソールに出力
         alert('データの保存に失敗しました。');
     } finally {
         hideLoading();
@@ -296,12 +296,18 @@ async function fetchGoogleSheetData() {
     const range = sheetName; // シート全体を取得
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
 
+    console.log('APIリクエストURL:', url); // ★APIリクエストURLをコンソールに出力
+
     try {
         const response = await fetch(url);
+        console.log('APIレスポンス:', response); // ★APIレスポンス全体をコンソールに出力
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const message = `HTTP error! status: ${response.status}, statusText: ${response.statusText}`;
+            console.error('APIエラーレスポンス:', message); // ★詳細なAPIエラーレスポンスをコンソールに出力
+            throw new Error(message);
         }
         const json = await response.json();
+        console.log('APIレスポンスJSON:', json); // ★APIレスポンスJSONをコンソールに出力
         return parseSheetData(json.values);
     } catch (error) {
         console.error('Google Sheets API エラー:', error);
@@ -328,13 +334,20 @@ async function updateGoogleSheetData(data) {
         },
         body: JSON.stringify(dataForSheet),
     };
+    console.log('API PUTリクエストURL:', url); // ★API PUTリクエストURLをコンソールに出力
+    console.log('API PUTリクエストデータ:', dataForSheet); // ★API PUTリクエストデータをコンソールに出力
+
 
     try {
         const response = await fetch(url, options);
+        console.log('API PUTレスポンス:', response); // ★API PUTレスポンス全体をコンソールに出力
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const message = `HTTP error! status: ${response.status}, statusText: ${response.statusText}`;
+            console.error('API PUTエラーレスポンス:', message); // ★詳細なAPI PUTエラーレスポンスをコンソールに出力
+            throw new Error(message);
         }
         const jsonResponse = await response.json();
+        console.log('API PUTレスポンスJSON:', jsonResponse); // ★API PUTレスポンスJSONをコンソールに出力
         return jsonResponse;
     } catch (error) {
         console.error('Google Sheets API 更新エラー:', error);
@@ -347,6 +360,7 @@ function parseSheetData(sheetValues) {
     if (!sheetValues || sheetValues.length === 0) {
         return { members: [], attendanceData: [] }; // シートが空の場合は空のデータで初期化
     }
+    console.log('シートデータ:', sheetValues); // ★シートデータをコンソールに出力
 
     const membersList = [];
     const attendanceList = [];
@@ -358,11 +372,17 @@ function parseSheetData(sheetValues) {
     const attendanceHeader = getFormattedDate(); // 今日の日付をヘッダーとして使用
     const attendanceColIndex = headerRow.indexOf(attendanceHeader);
 
+    console.log('ヘッダー行:', headerRow); // ★ヘッダー行をコンソールに出力
+    console.log('名前列インデックス:', nameColIndex); // ★名前列インデックスをコンソールに出力
+    console.log('楽器列インデックス:', instrumentColIndex); // ★楽器列インデックスをコンソールに出力
+    console.log('出席列インデックス:', attendanceColIndex); // ★出席列インデックスをコンソールに出力
+
 
     // ヘッダー行以降のデータ行を処理 (2行目から)
     for (let i = 1; i < sheetValues.length; i++) {
         const row = sheetValues[i];
         if (!row || row.length === 0) continue; // 空行をスキップ
+        console.log(`データ行 ${i+1}:`, row); // ★データ行をコンソールに出力
 
         // メンバー名と楽器名を取得
         const memberName = nameColIndex !== -1 ? row[nameColIndex] : '名前不明';
@@ -385,6 +405,9 @@ function parseSheetData(sheetValues) {
         attendanceList.push({ present: present });
 
     }
+    console.log('パース後のメンバーリスト:', membersList); // ★パース後のメンバーリストをコンソールに出力
+    console.log('パース後の出席データ:', attendanceList); // ★パース後の出席データをコンソールに出力
+
 
     return { members: membersList, attendanceData: attendanceList };
 }
