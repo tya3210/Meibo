@@ -1,210 +1,253 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ブラスバンド出欠管理</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        .instrument-selector { border: 2px solid #4CAF50; padding: 20px; margin-bottom: 20px; }
-        .hidden { display: none; }
-        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background-color: #f5f5f5; }
-        .status-btn { padding: 8px 15px; margin: 2px; cursor: pointer; border: none; border-radius: 3px; }
-        .present { background-color: #98fb98; }
-        .absent { background-color: #ffb6c1; }
-        .admin-section { border: 2px solid #4CAF50; padding: 15px; margin-top: 20px; }
-        .today { font-weight: bold; color: #2c5f2d; }
-        .editing { background-color: #f0f8ff; }
-        select { padding: 5px; margin: 5px; }
-    </style>
+<title>部活動出欠管理</title>
+<meta charset="UTF-8">
+<style>
+body { font-family: sans-serif; }
+h1, h2 { text-align: center; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+th, td { border: 1px solid black; padding: 8px; text-align: center; }
+th { background-color: #f0f0f0; }
+.button-container { text-align: center; margin-bottom: 20px; }
+button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+#addMemberSection { display: none; margin-bottom: 20px; border: 1px solid #ccc; padding: 15px; }
+#addMemberSection h2 { margin-top: 0; }
+#addMemberSection input[type="text"], #addMemberSection input[type="password"] { width: calc(100% - 22px); padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; }
+.attendance-checkbox { transform: scale(1.5); /* チェックボックスを大きく */ }
+</style>
 </head>
 <body>
-    <div id="instrument-selector" class="instrument-selector">
-        <h2>楽器を選択してください</h2>
-        <select id="instrument">
-            <option value="flute">フルート</option>
-            <option value="clarinet">クラリネット</option>
-            <option value="oboe">オーボエ</option>
-            <option value="sax">サックス</option>
-            <option value="trumpet">トランペット</option>
-            <option value="horn">ホルン</option>
-            <option value="trombone">トロンボーン</option>
-            <option value="euphonium">ユーフォニアム</option>
-            <option value="contrabass">コントラバス</option>
-            <option value="tuba">チューバ</option>
-            <option value="percussion">パーカッション</option>
-        </select>
-        <button onclick="selectInstrument()">選択</button>
+
+<h1>[あなたの部活動名] 出欠管理</h1>
+
+<div id="addMemberSection">
+    <h2>メンバー追加・編集 (管理者用)</h2>
+    <input type="password" id="adminPassword" placeholder="管理者パスワード">
+    <button onclick="checkAdminPassword()">認証</button>
+    <div id="addMemberForm" style="display: none;">
+        <input type="text" id="newMemberName" placeholder="新しいメンバー名">
+        <button onclick="addMember()">メンバー追加</button>
+        <ul id="memberList"></ul> <br>
+        <button onclick="saveMembers()">メンバーリストを保存</button>
     </div>
+</div>
 
-    <div id="main-content" class="hidden">
-        <h1>ブラスバンド出欠管理システム</h1>
-        <div class="today">今日の日付: <span id="today-date"></span></div>
-        <div id="attendance-table"></div>
+<div class="button-container">
+    <button onclick="toggleAddMemberSection()">メンバー追加・編集</button>
+</div>
 
-        <button onclick="toggleAdmin()">管理者モード</button>
-        <div id="admin-panel" class="admin-section hidden">
-            <h3>管理者パネル</h3>
-            <div>
-                <input type="text" id="new-name" placeholder="新しい名前">
-                <select id="new-instrument">
-                    <option value="flute">フルート</option>
-                    <option value="clarinet">クラリネット</option>
-                    <option value="oboe">オーボエ</option>
-                    <option value="sax">サックス</option>
-                    <option value="trumpet">トランペット</option>
-                    <option value="horn">ホルン</option>
-                    <option value="trombone">トロンボーン</option>
-                    <option value="euphonium">ユーフォニアム</option>
-                    <option value="contrabass">コントラバス</option>
-                    <option value="tuba">チューバ</option>
-                    <option value="percussion">パーカッション</option>
-                </select>
-                <button onclick="addMember()">メンバー追加</button>
-            </div>
-        </div>
-    </div>
+<h2>出欠状況 (本日: <span id="todayDate"></span>)</h2>
 
-    <script>
-        const ADMIN_PASSWORD = "brassband";
-        const STORAGE_KEY = "attendanceData";
-        const MEMBERS_KEY = "memberList";
-        
-        let state = {
-            members: JSON.parse(localStorage.getItem(MEMBERS_KEY)) || [],
-            attendance: JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}
-        };
+<table id="attendanceTable">
+    <thead>
+        <tr>
+            <th>名前</th>
+            <th>出席</th>
+            <th>欠席</th>
+        </tr>
+    </thead>
+    <tbody id="attendanceTableBody">
+        </tbody>
+</table>
 
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('today-date').textContent = today;
+<div class="button-container">
+    <button onclick="updateAttendance()">出欠を更新</button>
+</div>
 
-        // 初期表示処理
-        function init() {
-            const selectedInstrument = sessionStorage.getItem('selectedInstrument');
-            if (selectedInstrument) {
-                document.getElementById('instrument-selector').classList.add('hidden');
-                document.getElementById('main-content').classList.remove('hidden');
-                renderTable();
+<script>
+const adminPass = "admin123"; // ★★★ 管理者パスワード ★★★  <- 必要に応じて変更してください。
+let adminMode = false; // 管理者モードの状態を保持
+
+document.addEventListener('DOMContentLoaded', function() {
+    updateTodayDate();
+    loadMembers();
+    loadAttendance();
+    renderAttendanceTable();
+});
+
+function updateTodayDate() {
+    const todaySpan = document.getElementById('todayDate');
+    const today = new Date();
+    const formattedDate = today.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
+    todaySpan.textContent = formattedDate;
+}
+
+function toggleAddMemberSection() {
+    const section = document.getElementById('addMemberSection');
+    section.style.display = section.style.display === 'none' ? 'block' : 'none';
+    const form = document.getElementById('addMemberForm');
+    form.style.display = 'none'; // メンバー追加フォームも非表示にする
+}
+
+function checkAdminPassword() {
+    const passwordInput = document.getElementById('adminPassword');
+    const form = document.getElementById('addMemberForm');
+    if (passwordInput.value === adminPass) {
+        form.style.display = 'block';
+        loadMemberList(); // メンバーリストをロード
+        passwordInput.value = ''; // パスワード入力欄をクリア
+        alert('管理者モードになりました。');
+        adminMode = true; // 管理者モードON
+    } else {
+        alert('パスワードが違います。');
+        form.style.display = 'none'; // フォームを非表示に戻す
+        adminMode = false; // 管理者モードOFF
+    }
+}
+
+
+let members = []; // メンバーリストを保存する配列
+
+function loadMembers() {
+    const storedMembers = localStorage.getItem('members');
+    if (storedMembers) {
+        members = JSON.parse(storedMembers);
+    } else {
+        members = ["メンバー１", "メンバー２", "メンバー３"]; // 初期メンバーの例
+        saveMembers(); // 初期メンバーリストを保存
+    }
+}
+
+function loadMemberList() { // 管理者画面用のメンバーリスト表示
+    const memberListUl = document.getElementById('memberList');
+    memberListUl.innerHTML = ''; // リストをクリア
+    members.forEach((member, index) => {
+        const listItem = document.createElement('li');
+        listItem.textContent = member;
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = '削除';
+        deleteButton.onclick = function() { deleteMember(index); };
+        listItem.appendChild(deleteButton);
+        memberListUl.appendChild(listItem);
+    });
+}
+
+
+function addMember() {
+    if (!adminMode) {
+        alert('管理者モードでのみメンバー追加が可能です。');
+        return;
+    }
+    const newMemberNameInput = document.getElementById('newMemberName');
+    const newMemberName = newMemberNameInput.value.trim();
+    if (newMemberName && !members.includes(newMemberName)) { // 空でない、かつ重複しない場合のみ追加
+        members.push(newMemberName);
+        newMemberNameInput.value = ''; // 入力欄をクリア
+        saveMembers(); // メンバーリストを保存
+        loadMemberList(); // メンバーリストを再表示
+        renderAttendanceTable(); // 出席テーブルを再描画
+        alert(newMemberName + ' さんを追加しました。');
+    } else if (!newMemberName) {
+        alert('メンバー名を入力してください。');
+    } else {
+        alert('そのメンバーは既に登録されています。');
+    }
+}
+
+function deleteMember(index) {
+    if (!adminMode) {
+        alert('管理者モードでのみメンバー削除が可能です。');
+        return;
+    }
+    if (confirm(members[index] + ' さんを削除してもよろしいですか？')) {
+        members.splice(index, 1); // メンバーを削除
+        saveMembers(); // メンバーリストを保存
+        loadMemberList(); // メンバーリストを再表示
+        renderAttendanceTable(); // 出席テーブルを再描画
+        alert('メンバーを削除しました。');
+    }
+}
+
+
+function saveMembers() {
+    localStorage.setItem('members', JSON.stringify(members));
+}
+
+
+function loadAttendance() {
+    const today = getFormattedDate();
+    const storedAttendance = localStorage.getItem('attendance_' + today);
+    if (!storedAttendance) {
+        // 今日の出欠データがなければ初期化
+        initializeAttendanceForToday();
+        return;
+    }
+    attendanceData = JSON.parse(storedAttendance);
+}
+
+function initializeAttendanceForToday() {
+    attendanceData = members.map(() => ({ present: false })); // デフォルトは全員「欠席」
+    saveAttendance(); // 初期状態を保存
+}
+
+
+let attendanceData = []; // 出席データを保存する配列
+
+function renderAttendanceTable() {
+    const tableBody = document.getElementById('attendanceTableBody');
+    tableBody.innerHTML = ''; // テーブル内容をクリア
+
+    members.forEach((member, index) => {
+        const row = tableBody.insertRow();
+        const nameCell = row.insertCell(0);
+        const presentCell = row.insertCell(1);
+        const absentCell = row.insertCell(2);
+
+        nameCell.textContent = member;
+
+        // 出席ラジオボタン
+        const presentRadio = document.createElement('input');
+        presentRadio.type = 'radio';
+        presentRadio.name = `attendance_${index}`;
+        presentRadio.value = 'present';
+        presentRadio.classList.add('attendance-checkbox'); // クラスを追加
+        presentRadio.checked = attendanceData[index]?.present === true;
+        presentCell.appendChild(presentRadio);
+
+        // 欠席ラジオボタン
+        const absentRadio = document.createElement('input');
+        absentRadio.type = 'radio';
+        absentRadio.name = `attendance_${index}`;
+        absentRadio.value = 'absent';
+        absentRadio.classList.add('attendance-checkbox'); // クラスを追加
+        absentRadio.checked = attendanceData[index]?.present === false;
+        absentCell.appendChild(absentRadio);
+    });
+}
+
+
+function updateAttendance() {
+    const today = getFormattedDate();
+    attendanceData = members.map((member, index) => {
+        const radioNodes = document.querySelectorAll(`input[name="attendance_${index}"]`);
+        let isPresent = false;
+        radioNodes.forEach(radio => {
+            if (radio.value === 'present' && radio.checked) {
+                isPresent = true;
             }
-        }
+        });
+        return { present: isPresent };
+    });
+    saveAttendance();
+    alert('出欠状況を更新しました。');
+}
 
-        function selectInstrument() {
-            const instrument = document.getElementById('instrument').value;
-            sessionStorage.setItem('selectedInstrument', instrument);
-            document.getElementById('instrument-selector').classList.add('hidden');
-            document.getElementById('main-content').classList.remove('hidden');
-            renderTable();
-        }
+function saveAttendance() {
+    const today = getFormattedDate();
+    localStorage.setItem('attendance_' + today, JSON.stringify(attendanceData));
+}
 
-        function renderTable() {
-            const selectedInstrument = sessionStorage.getItem('selectedInstrument');
-            const filteredMembers = state.members.filter(m => m.instrument === selectedInstrument);
+function getFormattedDate() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`; // YYYY-MM-DD形式
+}
 
-            if (!state.attendance[today]) {
-                state.attendance[today] = {};
-                filteredMembers.forEach(member => {
-                    state.attendance[today][member.name] = 'present';
-                });
-                saveData();
-            }
 
-            let html = `
-                <table>
-                    <tr>
-                        <th>名前</th>
-                        <th>状態</th>
-                        <th>操作</th>
-                        ${isAdminMode() ? '<th>管理者操作</th>' : ''}
-                    </tr>`;
+</script>
 
-            filteredMembers.forEach(member => {
-                const status = state.attendance[today][member.name];
-                html += `
-                    <tr>
-                        <td>${member.name}</td>
-                        <td>${status === 'present' ? '出席' : '欠席'}</td>
-                        <td>
-                            <button class="status-btn ${status === 'present' ? 'present' : ''}" 
-                                    onclick="updateStatus('${member.name}', 'present')">出席</button>
-                            <button class="status-btn ${status === 'absent' ? 'absent' : ''}" 
-                                    onclick="updateStatus('${member.name}', 'absent')">欠席</button>
-                        </td>
-                        ${isAdminMode() ? `
-                        <td>
-                            <button onclick="editMember('${member.name}')">編集</button>
-                            <button onclick="deleteMember('${member.name}')">削除</button>
-                        </td>` : ''}
-                    </tr>`;
-            });
-
-            document.getElementById('attendance-table').innerHTML = html + '</table>';
-        }
-
-        // 以降の関数（updateStatus, toggleAdmin, addMember, editMember, deleteMember, saveData）は
-        // 前回の実装を楽器選択機能に対応するように修正したバージョン（コード制限のため一部省略）
-
-        function addMember() {
-            const newName = document.getElementById('new-name').value.trim();
-            const newInstrument = document.getElementById('new-instrument').value;
-            if (newName && !state.members.some(m => m.name === newName)) {
-                state.members.push({ name: newName, instrument: newInstrument });
-                state.attendance[today][newName] = 'present';
-                document.getElementById('new-name').value = '';
-                saveData();
-                renderTable();
-            }
-        }
-
-        function editMember(oldName) {
-            const member = state.members.find(m => m.name === oldName);
-            const row = event.target.closest('tr');
-            row.classList.add('editing');
-            row.innerHTML = `
-                <td>
-                    <input value="${member.name}" style="width:120px;">
-                    <select value="${member.instrument}">
-                        ${['flute','clarinet','oboe','sax','trumpet','horn','trombone','euphonium','contrabass','tuba','percussion']
-                            .map(i => `<option ${i === member.instrument ? 'selected' : ''}>${i}</option>`).join('')}
-                    </select>
-                </td>
-                <td colspan="2">
-                    <button onclick="saveEdit('${oldName}', this)">保存</button>
-                    <button onclick="cancelEdit()">取消</button>
-                </td>
-            `;
-        }
-
-        function saveEdit(oldName, button) {
-            const row = button.closest('tr');
-            const newName = row.querySelector('input').value.trim();
-            const newInstrument = row.querySelector('select').value;
-
-            if (!newName || state.members.some(m => m.name === newName && m.name !== oldName)) {
-                alert('無効な入力です');
-                return;
-            }
-
-            const member = state.members.find(m => m.name === oldName);
-            member.name = newName;
-            member.instrument = newInstrument;
-
-            Object.keys(state.attendance).forEach(date => {
-                if (state.attendance[date][oldName]) {
-                    state.attendance[date][newName] = state.attendance[date][oldName];
-                    delete state.attendance[date][oldName];
-                }
-            });
-
-            saveData();
-            renderTable();
-        }
-
-        // その他の関数（updateStatus, deleteMember, toggleAdmin, saveData等）は
-        // 前回の実装を適宜修正して継承（文字数制限のため省略）
-
-        init();
-    </script>
 </body>
 </html>
