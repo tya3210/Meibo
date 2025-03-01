@@ -1,210 +1,145 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ブラスバンド出欠管理</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        .instrument-selector { border: 2px solid #4CAF50; padding: 20px; margin-bottom: 20px; }
-        .hidden { display: none; }
-        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background-color: #f5f5f5; }
-        .status-btn { padding: 8px 15px; margin: 2px; cursor: pointer; border: none; border-radius: 3px; }
-        .present { background-color: #98fb98; }
-        .absent { background-color: #ffb6c1; }
-        .admin-section { border: 2px solid #4CAF50; padding: 15px; margin-top: 20px; }
-        .today { font-weight: bold; color: #2c5f2d; }
-        .editing { background-color: #f0f8ff; }
-        select { padding: 5px; margin: 5px; }
-    </style>
+<title>部活出欠確認</title>
+<style>
+body { font-family: sans-serif; }
+.admin-panel { display: none; }
+</style>
 </head>
 <body>
-    <div id="instrument-selector" class="instrument-selector">
-        <h2>楽器を選択してください</h2>
-        <select id="instrument">
-            <option value="flute">フルート</option>
-            <option value="clarinet">クラリネット</option>
-            <option value="oboe">オーボエ</option>
-            <option value="sax">サックス</option>
-            <option value="trumpet">トランペット</option>
-            <option value="horn">ホルン</option>
-            <option value="trombone">トロンボーン</option>
-            <option value="euphonium">ユーフォニアム</option>
-            <option value="contrabass">コントラバス</option>
-            <option value="tuba">チューバ</option>
-            <option value="percussion">パーカッション</option>
-        </select>
-        <button onclick="selectInstrument()">選択</button>
-    </div>
+<h1>部活出欠確認</h1>
 
-    <div id="main-content" class="hidden">
-        <h1>ブラスバンド出欠管理システム</h1>
-        <div class="today">今日の日付: <span id="today-date"></span></div>
-        <div id="attendance-table"></div>
+<div id="password-form">
+  <label for="password">パスワード:</label>
+  <input type="password" id="password">
+  <button onclick="checkPassword()">ログイン</button>
+</div>
 
-        <button onclick="toggleAdmin()">管理者モード</button>
-        <div id="admin-panel" class="admin-section hidden">
-            <h3>管理者パネル</h3>
-            <div>
-                <input type="text" id="new-name" placeholder="新しい名前">
-                <select id="new-instrument">
-                    <option value="flute">フルート</option>
-                    <option value="clarinet">クラリネット</option>
-                    <option value="oboe">オーボエ</option>
-                    <option value="sax">サックス</option>
-                    <option value="trumpet">トランペット</option>
-                    <option value="horn">ホルン</option>
-                    <option value="trombone">トロンボーン</option>
-                    <option value="euphonium">ユーフォニアム</option>
-                    <option value="contrabass">コントラバス</option>
-                    <option value="tuba">チューバ</option>
-                    <option value="percussion">パーカッション</option>
-                </select>
-                <button onclick="addMember()">メンバー追加</button>
-            </div>
-        </div>
-    </div>
+<div id="instrument-select" style="display: none;">
+  <label for="instrument">楽器を選択:</label>
+  <select id="instrument">
+    <option value="フルート">フルート</option>
+    <option value="クラリネット">クラリネット</option>
+    <option value="オーボエ">オーボエ</option>
+    <option value="サックス">サックス</option>
+    <option value="トランペット">トランペット</option>
+    <option value="ホルン">ホルン</option>
+    <option value="トロンボーン">トロンボーン</option>
+    <option value="ユーフォニアム">ユーフォニアム</option>
+    <option value="コントラバス">コントラバス</option>
+    <option value="チューバ">チューバ</option>
+    <option value="パーカッション">パーカッション</option>
+  </select>
+  <button onclick="showAttendance()">選択</button>
+</div>
 
-    <script>
-        const ADMIN_PASSWORD = "brassband";
-        const STORAGE_KEY = "attendanceData";
-        const MEMBERS_KEY = "memberList";
-        
-        let state = {
-            members: JSON.parse(localStorage.getItem(MEMBERS_KEY)) || [],
-            attendance: JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}
-        };
+<div id="attendance-form" style="display: none;">
+  <h2>出欠確認</h2>
+  <ul id="member-list"></ul>
+  <input type="text" id="new-member-name" placeholder="新しい部員名">
+  <button onclick="addMember()">追加</button>
+  <button onclick="toggleAdmin()">管理者モード</button>
+</div>
 
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('today-date').textContent = today;
+<div class="admin-panel">
+  <h2>管理者パネル</h2>
+  <ul id="admin-member-list"></ul>
+</div>
 
-        // 初期表示処理
-        function init() {
-            const selectedInstrument = sessionStorage.getItem('selectedInstrument');
-            if (selectedInstrument) {
-                document.getElementById('instrument-selector').classList.add('hidden');
-                document.getElementById('main-content').classList.remove('hidden');
-                renderTable();
-            }
-        }
+<script>
+const correctPassword = "Brassband";
+let isAdmin = false;
+let currentInstrument = "";
+let members = {};
 
-        function selectInstrument() {
-            const instrument = document.getElementById('instrument').value;
-            sessionStorage.setItem('selectedInstrument', instrument);
-            document.getElementById('instrument-selector').classList.add('hidden');
-            document.getElementById('main-content').classList.remove('hidden');
-            renderTable();
-        }
+function checkPassword() {
+  const password = document.getElementById("password").value;
+  if (password === correctPassword) {
+    document.getElementById("password-form").style.display = "none";
+    document.getElementById("instrument-select").style.display = "block";
+  } else {
+    alert("パスワードが違います");
+  }
+}
 
-        function renderTable() {
-            const selectedInstrument = sessionStorage.getItem('selectedInstrument');
-            const filteredMembers = state.members.filter(m => m.instrument === selectedInstrument);
+function showAttendance() {
+  currentInstrument = document.getElementById("instrument").value;
+  if (!members[currentInstrument]) {
+    members[currentInstrument] = [];
+  }
+  document.getElementById("instrument-select").style.display = "none";
+  document.getElementById("attendance-form").style.display = "block";
+  updateMemberList();
+}
 
-            if (!state.attendance[today]) {
-                state.attendance[today] = {};
-                filteredMembers.forEach(member => {
-                    state.attendance[today][member.name] = 'present';
-                });
-                saveData();
-            }
+function updateMemberList() {
+  const memberList = document.getElementById("member-list");
+  memberList.innerHTML = "";
+  members[currentInstrument].forEach(member => {
+    const li = document.createElement("li");
+    li.textContent = member;
+    memberList.appendChild(li);
+  });
+}
 
-            let html = `
-                <table>
-                    <tr>
-                        <th>名前</th>
-                        <th>状態</th>
-                        <th>操作</th>
-                        ${isAdminMode() ? '<th>管理者操作</th>' : ''}
-                    </tr>`;
+function addMember() {
+  const name = document.getElementById("new-member-name").value;
+  if (name) {
+    members[currentInstrument].push(name);
+    document.getElementById("new-member-name").value = "";
+    updateMemberList();
+    updateAdminMemberList();
+  }
+}
 
-            filteredMembers.forEach(member => {
-                const status = state.attendance[today][member.name];
-                html += `
-                    <tr>
-                        <td>${member.name}</td>
-                        <td>${status === 'present' ? '出席' : '欠席'}</td>
-                        <td>
-                            <button class="status-btn ${status === 'present' ? 'present' : ''}" 
-                                    onclick="updateStatus('${member.name}', 'present')">出席</button>
-                            <button class="status-btn ${status === 'absent' ? 'absent' : ''}" 
-                                    onclick="updateStatus('${member.name}', 'absent')">欠席</button>
-                        </td>
-                        ${isAdminMode() ? `
-                        <td>
-                            <button onclick="editMember('${member.name}')">編集</button>
-                            <button onclick="deleteMember('${member.name}')">削除</button>
-                        </td>` : ''}
-                    </tr>`;
-            });
+function toggleAdmin() {
+  isAdmin = !isAdmin;
+  const adminPanels = document.querySelectorAll(".admin-panel");
+  adminPanels.forEach(panel => {
+    panel.style.display = isAdmin ? "block" : "none";
+  });
+  updateAdminMemberList();
+}
 
-            document.getElementById('attendance-table').innerHTML = html + '</table>';
-        }
+function updateAdminMemberList() {
+    if (!isAdmin) return;
+    const adminMemberList = document.getElementById("admin-member-list");
+    adminMemberList.innerHTML = "";
+    Object.keys(members).forEach(instrument => {
+        const instrumentHeader = document.createElement("h3");
+        instrumentHeader.textContent = instrument;
+        adminMemberList.appendChild(instrumentHeader);
 
-        // 以降の関数（updateStatus, toggleAdmin, addMember, editMember, deleteMember, saveData）は
-        // 前回の実装を楽器選択機能に対応するように修正したバージョン（コード制限のため一部省略）
+        members[instrument].forEach((member, index) => {
+            const li = document.createElement("li");
+            li.textContent = member;
 
-        function addMember() {
-            const newName = document.getElementById('new-name').value.trim();
-            const newInstrument = document.getElementById('new-instrument').value;
-            if (newName && !state.members.some(m => m.name === newName)) {
-                state.members.push({ name: newName, instrument: newInstrument });
-                state.attendance[today][newName] = 'present';
-                document.getElementById('new-name').value = '';
-                saveData();
-                renderTable();
-            }
-        }
+            const deleteButton = document.createElement("button");
+            deleteButton.textContent = "削除";
+            deleteButton.onclick = () => {
+                members[instrument].splice(index, 1);
+                updateAdminMemberList();
+                updateMemberList();
+            };
+            li.appendChild(deleteButton);
 
-        function editMember(oldName) {
-            const member = state.members.find(m => m.name === oldName);
-            const row = event.target.closest('tr');
-            row.classList.add('editing');
-            row.innerHTML = `
-                <td>
-                    <input value="${member.name}" style="width:120px;">
-                    <select value="${member.instrument}">
-                        ${['flute','clarinet','oboe','sax','trumpet','horn','trombone','euphonium','contrabass','tuba','percussion']
-                            .map(i => `<option ${i === member.instrument ? 'selected' : ''}>${i}</option>`).join('')}
-                    </select>
-                </td>
-                <td colspan="2">
-                    <button onclick="saveEdit('${oldName}', this)">保存</button>
-                    <button onclick="cancelEdit()">取消</button>
-                </td>
-            `;
-        }
-
-        function saveEdit(oldName, button) {
-            const row = button.closest('tr');
-            const newName = row.querySelector('input').value.trim();
-            const newInstrument = row.querySelector('select').value;
-
-            if (!newName || state.members.some(m => m.name === newName && m.name !== oldName)) {
-                alert('無効な入力です');
-                return;
-            }
-
-            const member = state.members.find(m => m.name === oldName);
-            member.name = newName;
-            member.instrument = newInstrument;
-
-            Object.keys(state.attendance).forEach(date => {
-                if (state.attendance[date][oldName]) {
-                    state.attendance[date][newName] = state.attendance[date][oldName];
-                    delete state.attendance[date][oldName];
+            const editButton = document.createElement("button");
+            editButton.textContent = "編集";
+            editButton.onclick = () => {
+                const newName = prompt("新しい部員名を入力してください", member);
+                if (newName) {
+                    members[instrument][index] = newName;
+                    updateAdminMemberList();
+                    updateMemberList();
                 }
-            });
+            };
+            li.appendChild(editButton);
 
-            saveData();
-            renderTable();
-        }
-
-        // その他の関数（updateStatus, deleteMember, toggleAdmin, saveData等）は
-        // 前回の実装を適宜修正して継承（文字数制限のため省略）
-
-        init();
-    </script>
+            adminMemberList.appendChild(li);
+        });
+    });
+}
+</script>
 </body>
 </html>
