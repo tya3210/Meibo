@@ -57,6 +57,10 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
     100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
+#exportImportSection { text-align: center; margin-bottom: 20px; }
+#exportImportSection button, #exportImportSection input[type="file"] { margin: 5px; }
+
+
 </style>
 </head>
 <body>
@@ -130,6 +134,13 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
         <button onclick="updateAttendance()">出欠を更新</button>
     </div>
 
+    <div id="exportImportSection">
+        <h2>データ共有</h2>
+        <button onclick="exportData()">データエクスポート</button>
+        <input type="file" id="importFile" accept=".json">
+        <button onclick="importData()">データインポート</button>
+    </div>
+
 </div>
 
 <div id="loading">
@@ -143,14 +154,12 @@ let members = [];
 let attendanceData = [];
 let selectedInstrument = "";
 
-// ★★★ Google スプレッドシートの設定 ★★★
-const spreadsheetId = 'ここにあなたのスプレッドシートIDを入力してください'; // ★★★ スプレッドシートIDを入力 ★★★
-const apiKey = 'ここにあなたのGoogle APIキーを入力してください'; // ★★★ Google APIキーを入力 ★★★
-const sheetName = '出欠データ'; // シート名
-
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('instrumentSection').style.display = 'block';
     document.getElementById('attendanceSection').style.display = 'none';
+    loadInstrumentPreference(); // 楽器の選択状態をロード
+    loadLocalData(); // ローカルストレージからデータ読み込み (初回起動時)
+    updateInstrumentDisplay();
 });
 
 function showLoading() {
@@ -164,8 +173,6 @@ function hideLoading() {
 
 function initializeAttendancePage() {
     updateTodayDate();
-    loadInstrumentPreference(); // 楽器の選択状態をロード
-    loadSharedData(); // Google スプレッドシートからデータ読み込み
     updateInstrumentDisplay();
 }
 
@@ -195,6 +202,7 @@ function selectInstrument() {
         document.getElementById('instrumentSection').style.display = 'none';
         document.getElementById('attendanceSection').style.display = 'block';
         initializeAttendancePage();
+        renderAttendanceTable(); // 出欠テーブルをレンダリング
         updateAbsentMemberList();
     } else {
         alert('楽器を選択してください。');
@@ -239,201 +247,33 @@ function checkAdminPassword() {
 }
 
 
-async function loadSharedData() {
-    showLoading();
-    try {
-        const data = await fetchGoogleSheetData();
-        if (data && data.members) {
-            members = data.members;
-        } else {
-            members = []; // データ取得失敗時は空のメンバーリストで初期化
-        }
-        if (data && data.attendanceData) {
-            attendanceData = data.attendanceData;
-        } else {
-            initializeAttendanceForToday(); // 出欠データ取得失敗時は今日の日付で初期化
-        }
-        loadMemberList(); // メンバーリストをレンダリング
-        renderAttendanceTable(); // 出欠テーブルをレンダリング
-        updateAbsentMemberList(); // 欠席者リストを更新
-    } catch (error) {
-        console.error('データ読み込みエラー:', error); // ★詳細なエラー内容をコンソールに出力
-        alert('データの読み込みに失敗しました。\n\n詳細: ' + error.message); // ★エラーメッセージをアラート表示 (詳細版)
-        members = []; // エラー発生時も空のメンバーリストで初期化
-        initializeAttendanceForToday(); // エラー発生時も今日の日付で初期化
-        loadMemberList();
-        renderAttendanceTable();
-        updateAbsentMemberList();
-    } finally {
-        hideLoading();
+function loadLocalData() {
+    const storedMembers = localStorage.getItem('members');
+    if (storedMembers) {
+        members = JSON.parse(storedMembers);
+    } else {
+        members = []; // 初期メンバーリスト (必要に応じて設定)
     }
+    const storedAttendanceData = localStorage.getItem('attendanceData');
+    if (storedAttendanceData) {
+        attendanceData = JSON.parse(storedAttendanceData);
+    } else {
+        initializeAttendanceForToday();
+    }
+    loadMemberList();
+    renderAttendanceTable();
+    updateAbsentMemberList();
 }
 
 
-async function saveSharedData() {
-    showLoading();
-    const dataToSave = {
-        members: members,
-        attendanceData: attendanceData
-    };
-    try {
-        await updateGoogleSheetData(dataToSave);
-        alert('データを共有サーバーに保存しました。');
-    } catch (error) {
-        console.error('データ保存エラー:', error); // ★詳細なエラー内容をコンソールに出力
-        alert('データの保存に失敗しました。\n\n詳細: ' + error.message); // ★エラーメッセージをアラート表示 (詳細版)
-    } finally {
-        hideLoading();
-    }
+function saveLocalData() {
+    localStorage.setItem('members', JSON.stringify(members));
+    localStorage.setItem('attendanceData', JSON.stringify(attendanceData));
 }
-
-
-async function fetchGoogleSheetData() {
-    if (!spreadsheetId || !apiKey || !sheetName) {
-        alert('スプレッドシートID、APIキー、シート名が設定されていません。');
-        return null;
-    }
-    const range = sheetName; // シート全体を取得
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
-
-    console.log('APIリクエストURL:', url); // ★APIリクエストURLをコンソールに出力
-
-    try {
-        const response = await fetch(url);
-        console.log('APIレスポンス:', response); // ★APIレスポンス全体をコンソールに出力
-        if (!response.ok) { // ★response.ok が false の場合のエラー処理を追加
-            const message = `HTTPエラーが発生しました。ステータスコード: ${response.status}, ステータステキスト: ${response.statusText}`;
-            alert(message); // ★エラーメッセージをアラート表示
-            throw new Error(message);
-        }
-        const json = await response.json();
-        console.log('APIレスポンスJSON:', json); // ★APIレスポンスJSONをコンソールに出力
-        return parseSheetData(json.values);
-    } catch (error) {
-        console.error('Google Sheets API エラー:', error);
-        alert('データの読み込みに失敗しました。\n\n詳細: ' + error.message); // ★エラーメッセージをアラート表示 (詳細版)
-        throw error; // エラーをthrowして上位でキャッチ
-    }
-}
-
-async function updateGoogleSheetData(data) {
-    if (!spreadsheetId || !apiKey || !sheetName) {
-        alert('スプレッドシートID、APIキー、シート名が設定されていません。');
-        return;
-    }
-
-    const values = formatDataForSheet(data);
-    const dataForSheet = {
-        values: values
-    };
-
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:C?valueInputOption=USER_ENTERED&key=${apiKey}`; // A1:C は仮の範囲。実際にはデータに合わせて調整が必要
-    const options = {
-        method: 'PUT', // PUTで範囲を上書き
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(dataForSheet),
-    };
-    console.log('API PUTリクエストURL:', url); // ★API PUTリクエストURLをコンソールに出力
-    console.log('API PUTリクエストデータ:', dataForSheet); // ★API PUTリクエストデータをコンソールに出力
-
-
-    try {
-        const response = await fetch(url, options);
-        console.log('API PUTレスポンス:', response); // ★API PUTレスポンス全体をコンソールに出力
-        if (!response.ok) { // ★response.ok が false の場合のエラー処理を追加
-            const message = `HTTPエラーが発生しました。ステータスコード: ${response.status}, ステータステキスト: ${response.statusText}`;
-            alert(message); // ★エラーメッセージをアラート表示
-            throw new Error(message);
-        }
-        const jsonResponse = await response.json();
-        console.log('API PUTレスポンスJSON:', jsonResponse); // ★API PUTレスポンスJSONをコンソールに出力
-        return jsonResponse;
-    } catch (error) {
-        console.error('Google Sheets API 更新エラー:', error);
-        alert('データの保存に失敗しました。\n\n詳細: ' + error.message); // ★エラーメッセージをアラート表示 (詳細版)
-        throw error; // エラーをthrowして上位でキャッチ
-    }
-}
-
-
-function parseSheetData(sheetValues) {
-    if (!sheetValues || sheetValues.length === 0) {
-        return { members: [], attendanceData: [] }; // シートが空の場合は空のデータで初期化
-    }
-    console.log('シートデータ:', sheetValues); // ★シートデータをコンソールに出力
-
-    const membersList = [];
-    const attendanceList = [];
-
-    // スプレッドシートの最初の行をヘッダー行とみなし、列のインデックスを取得
-    const headerRow = sheetValues[0];
-    const nameColIndex = headerRow.indexOf('名前');
-    const instrumentColIndex = headerRow.indexOf('楽器');
-    const attendanceHeader = getFormattedDate(); // 今日の日付をヘッダーとして使用
-    const attendanceColIndex = headerRow.indexOf(attendanceHeader);
-
-    console.log('ヘッダー行:', headerRow); // ★ヘッダー行をコンソールに出力
-    console.log('名前列インデックス:', nameColIndex); // ★名前列インデックスをコンソールに出力
-    console.log('楽器列インデックス:', instrumentColIndex); // ★楽器列インデックスをコンソールに出力
-    console.log('出席列インデックス:', attendanceColIndex); // ★出席列インデックスをコンソールに出力
-
-
-    // ヘッダー行以降のデータ行を処理 (2行目から)
-    for (let i = 1; i < sheetValues.length; i++) {
-        const row = sheetValues[i];
-        if (!row || row.length === 0) continue; // 空行をスキップ
-        console.log(`データ行 ${i+1}:`, row); // ★データ行をコンソールに出力
-
-        // メンバー名と楽器名を取得
-        const memberName = nameColIndex !== -1 ? row[nameColIndex] : '名前不明';
-        const instrumentName = instrumentColIndex !== -1 ? row[instrumentColIndex] : '';
-
-
-        if (memberName !== '名前') { // ヘッダー行のメンバー名をスキップ
-            membersList.push({ name: memberName, instrument: instrumentName });
-        }
-
-
-        // 出席データを取得
-        let present = false; // デフォルトは欠席
-        if (attendanceColIndex !== -1 && row.length > attendanceColIndex) {
-            const attendanceValue = row[attendanceColIndex];
-            if (attendanceValue === '出席') {
-                present = true;
-            }
-        }
-        attendanceList.push({ present: present });
-
-    }
-    console.log('パース後のメンバーリスト:', membersList); // ★パース後のメンバーリストをコンソールに出力
-    console.log('パース後の出席データ:', attendanceList); // ★パース後の出席データをコンソールに出力
-
-
-    return { members: membersList, attendanceData: attendanceList };
-}
-
-
-function formatDataForSheet(data) {
-    const values = [];
-    // ヘッダー行
-    values.push(['名前', '楽器', getFormattedDate()]); // 出席列のヘッダーは今日の日付
-
-    // データ行
-    for (let i = 0; i < data.members.length; i++) {
-        const member = data.members[i];
-        const attendance = data.attendanceData[i];
-        const attendanceStatus = attendance.present ? '出席' : '欠席';
-        values.push([member.name, member.instrument, attendanceStatus]);
-    }
-    return values;
-}
-
 
 
 function loadMembers() {
-    loadSharedData(); // Google Sheetsからメンバーリストと出欠データをロード
+    loadLocalData(); // ローカルストレージからメンバーリストと出欠データをロード
 }
 
 
@@ -565,7 +405,7 @@ async function deleteMember(index) {
 
 
 async function saveMembers() {
-    await saveSharedData(); // Google Sheets に全データを保存 (メンバーリストと出欠データ両方)
+    saveLocalData(); // ローカルストレージに全データを保存 (メンバーリストと出欠データ両方)
 }
 
 
@@ -631,14 +471,14 @@ async function updateAttendance() {
     });
 
 
-    await saveAttendance(); // 出欠データを保存 (Google Sheets に保存)
+    await saveAttendance(); // 出欠データを保存 (ローカルストレージに保存)
     updateAbsentMemberList();
     alert('出欠状況を更新しました。');
 }
 
 
 async function saveAttendance() {
-    await saveSharedData(); // Google Sheets に全データを保存 (メンバーリストと出欠データ両方)
+    saveLocalData(); // ローカルストレージに全データを保存 (メンバーリストと出欠データ両方)
 }
 
 function getFormattedDate() {
@@ -670,6 +510,53 @@ function updateAbsentMemberList() {
     } else {
         document.getElementById('absentMemberListSection').style.display = 'none';
     }
+}
+
+function exportData() {
+    const exportData = {
+        members: members,
+        attendanceData: attendanceData,
+        selectedInstrument: selectedInstrument
+    };
+    const jsonString = JSON.stringify(exportData);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'attendance_data.json'; // ファイル名を指定
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function importData() {
+    const fileInput = document.getElementById('importFile');
+    const file = fileInput.files[0];
+    if (!file) {
+        alert('ファイルを選択してください。');
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        try {
+            const importData = JSON.parse(event.target.result);
+            members = importData.members || [];
+            attendanceData = importData.attendanceData || initializeAttendanceForToday();
+            selectedInstrument = importData.selectedInstrument || ""; // 楽器選択状態もインポート
+            localStorage.setItem('selectedInstrument', selectedInstrument); // 楽器選択状態を保存
+            loadMemberList();
+            renderAttendanceTable();
+            updateAbsentMemberList();
+            updateInstrumentDisplay();
+            alert('データをインポートしました。');
+        } catch (e) {
+            alert('ファイル読み込みエラー: JSON形式のファイルを選択してください。');
+            console.error('JSON パースエラー:', e);
+        }
+    };
+    reader.readAsText(file);
+    fileInput.value = ''; // ファイル選択をリセット
 }
 
 
