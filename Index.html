@@ -1,1 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>部活出欠管理</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f5f5f5; }
+        .status-btn { padding: 8px 15px; margin: 2px; cursor: pointer; border: none; border-radius: 3px; }
+        .present { background-color: #98fb98; }
+        .absent { background-color: #ffb6c1; }
+        .admin-section { border: 2px solid #4CAF50; padding: 15px; margin-top: 20px; }
+        .today { font-weight: bold; color: #2c5f2d; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>部活出欠管理システム</h1>
+    <div class="today">今日の日付: <span id="today-date"></span></div>
+    
+    <div id="attendance-table"></div>
 
+    <button onclick="toggleAdmin()">管理者モード</button>
+    <div id="admin-panel" class="admin-section hidden">
+        <h3>管理者パネル</h3>
+        <div>
+            <input type="text" id="new-name" placeholder="新しい名前">
+            <button onclick="addMember()">メンバー追加</button>
+        </div>
+    </div>
+
+    <script>
+        // 設定
+        const ADMIN_PASSWORD = "club123";
+        const STORAGE_KEY = "attendanceData";
+        const MEMBERS_KEY = "memberList";
+
+        // 初期データ設定
+        let state = {
+            members: JSON.parse(localStorage.getItem(MEMBERS_KEY)) || [],
+            attendance: JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}
+        };
+
+        // 今日の日付取得
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('today-date').textContent = today;
+
+        // 初期表示
+        renderTable();
+
+        function renderTable() {
+            if (!state.attendance[today]) {
+                state.attendance[today] = {};
+                state.members.forEach(member => {
+                    state.attendance[today][member] = 'present'; // デフォルトを出席に設定
+                });
+                saveData();
+            }
+
+            let html = `
+                <table>
+                    <tr>
+                        <th>名前</th>
+                        <th>状態</th>
+                        <th>操作</th>
+                    </tr>`;
+
+            state.members.forEach(member => {
+                const status = state.attendance[today][member];
+                html += `
+                    <tr>
+                        <td>${member}</td>
+                        <td>${getStatusLabel(status)}</td>
+                        <td>
+                            <button class="status-btn ${status === 'present' ? 'present' : ''}" 
+                                    onclick="updateStatus('${member}', 'present')">出席</button>
+                            <button class="status-btn ${status === 'absent' ? 'absent' : ''}" 
+                                    onclick="updateStatus('${member}', 'absent')">欠席</button>
+                        </td>
+                    </tr>`;
+            });
+
+            html += '</table>';
+            document.getElementById('attendance-table').innerHTML = html;
+        }
+
+        function getStatusLabel(status) {
+            return status === 'present' ? '出席' : '欠席';
+        }
+
+        function updateStatus(member, status) {
+            state.attendance[today][member] = status;
+            saveData();
+            renderTable();
+        }
+
+        function toggleAdmin() {
+            const password = prompt("管理者パスワードを入力してください:");
+            if (password === ADMIN_PASSWORD) {
+                document.getElementById('admin-panel').classList.toggle('hidden');
+            } else {
+                alert("パスワードが違います");
+            }
+        }
+
+        function addMember() {
+            const newMember = document.getElementById('new-name').value.trim();
+            if (newMember && !state.members.includes(newMember)) {
+                state.members.push(newMember);
+                state.attendance[today][newMember] = 'present'; // 新規メンバーのデフォルトを出席に設定
+                document.getElementById('new-name').value = '';
+                saveData();
+                renderTable();
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state.attendance));
+            localStorage.setItem(MEMBERS_KEY, JSON.stringify(state.members));
+        }
+    </script>
+</body>
+</html>
