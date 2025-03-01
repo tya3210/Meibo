@@ -27,8 +27,36 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
 #absentMemberListSection { text-align: left; margin-top: 20px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
 #absentMemberList { list-style-type: none; padding-left: 0; }
 #absentMemberList li { margin-bottom: 5px; }
-.instrument-label { display: none; } /* 楽器名ラベルを非表示に */
-.input-group { display: block; } /* input-groupをブロック要素として表示 */
+.instrument-label { display: none; }
+.input-group { display: block; }
+#loading {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5); /* 半透明の背景 */
+    z-index: 1000; /* 最前面に表示 */
+}
+#loading-spinner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border: 16px solid #f3f3f3; /* Light grey */
+    border-top: 16px solid #3498db; /* Blue */
+    border-radius: 50%;
+    width: 120px;
+    height: 120px;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
 </style>
 </head>
 <body>
@@ -104,6 +132,10 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
 
 </div>
 
+<div id="loading">
+    <div id="loading-spinner"></div>
+</div>
+
 <script>
 const adminPass = "Brassband";
 let adminMode = false;
@@ -111,16 +143,29 @@ let members = [];
 let attendanceData = [];
 let selectedInstrument = "";
 
+// ★★★ Google スプレッドシートの設定 ★★★
+const spreadsheetId = '1-9vzH62F21Kvqr4b6xCbiqPJuVIpp3hLjxie6vDb6A8/edit'; // ★★★ スプレッドシートIDを入力 ★★★
+const apiKey = 'AIzaSyCSmweNEW46tmbeTiZ1DYnMHZ3LL2qPxn8'; // ★★★ Google APIキーを入力 ★★★
+const sheetName = '出欠データ'; // シート名
+
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('instrumentSection').style.display = 'block';
     document.getElementById('attendanceSection').style.display = 'none';
 });
 
+function showLoading() {
+    document.getElementById('loading').style.display = 'block';
+}
+
+function hideLoading() {
+    document.getElementById('loading').style.display = 'none';
+}
+
+
 function initializeAttendancePage() {
     updateTodayDate();
-    loadMembers();
-    loadAttendance();
-    renderAttendanceTable();
+    loadInstrumentPreference(); // 楽器の選択状態をロード
+    loadSharedData(); // Google スプレッドシートからデータ読み込み
     updateInstrumentDisplay();
 }
 
@@ -132,9 +177,13 @@ function updateInstrumentDisplay() {
 
 function loadInstrumentPreference() {
     selectedInstrument = localStorage.getItem('selectedInstrument');
+    if (selectedInstrument) {
+        document.getElementById('instrumentSelect').value = selectedInstrument; // 楽器選択セレクトボックスに反映
+    }
 }
 
 function saveInstrumentPreference() {
+    selectedInstrument = document.getElementById('instrumentSelect').value;
     localStorage.setItem('selectedInstrument', selectedInstrument);
 }
 
@@ -190,20 +239,178 @@ function checkAdminPassword() {
 }
 
 
-function loadMembers() {
-    const storedMembers = localStorage.getItem('members');
-    if (storedMembers) {
-        members = JSON.parse(storedMembers);
-    } else {
-        members = [  // 初期メンバーリストを更新 - 楽器情報 **あり** (ここは変更しない)
-            { name: "メンバー1", instrument: "フルート" },
-            { name: "メンバー2", instrument: "フルート" },
-            { name: "メンバー3", instrument: "チューバ" },
-            { name: "メンバー4", instrument: "チューバ" }
-        ];
-        saveMembers();
+async function loadSharedData() {
+    showLoading();
+    try {
+        const data = await fetchGoogleSheetData();
+        if (data && data.members) {
+            members = data.members;
+        } else {
+            members = []; // データ取得失敗時は空のメンバーリストで初期化
+        }
+        if (data && data.attendanceData) {
+            attendanceData = data.attendanceData;
+        } else {
+            initializeAttendanceForToday(); // 出欠データ取得失敗時は今日の日付で初期化
+        }
+        loadMemberList(); // メンバーリストをレンダリング
+        renderAttendanceTable(); // 出欠テーブルをレンダリング
+        updateAbsentMemberList(); // 欠席者リストを更新
+    } catch (error) {
+        console.error('データ読み込みエラー:', error);
+        alert('データの読み込みに失敗しました。');
+        members = []; // エラー発生時も空のメンバーリストで初期化
+        initializeAttendanceForToday(); // エラー発生時も今日の日付で初期化
+        loadMemberList();
+        renderAttendanceTable();
+        updateAbsentMemberList();
+    } finally {
+        hideLoading();
     }
 }
+
+
+async function saveSharedData() {
+    showLoading();
+    const dataToSave = {
+        members: members,
+        attendanceData: attendanceData
+    };
+    try {
+        await updateGoogleSheetData(dataToSave);
+        alert('データを共有サーバーに保存しました。');
+    } catch (error) {
+        console.error('データ保存エラー:', error);
+        alert('データの保存に失敗しました。');
+    } finally {
+        hideLoading();
+    }
+}
+
+
+async function fetchGoogleSheetData() {
+    if (!spreadsheetId || !apiKey || !sheetName) {
+        alert('スプレッドシートID、APIキー、シート名が設定されていません。');
+        return null;
+    }
+    const range = sheetName; // シート全体を取得
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const json = await response.json();
+        return parseSheetData(json.values);
+    } catch (error) {
+        console.error('Google Sheets API エラー:', error);
+        throw error; // エラーをthrowして上位でキャッチ
+    }
+}
+
+async function updateGoogleSheetData(data) {
+    if (!spreadsheetId || !apiKey || !sheetName) {
+        alert('スプレッドシートID、APIキー、シート名が設定されていません。');
+        return;
+    }
+
+    const values = formatDataForSheet(data);
+    const dataForSheet = {
+        values: values
+    };
+
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:C?valueInputOption=USER_ENTERED&key=${apiKey}`; // A1:C は仮の範囲。実際にはデータに合わせて調整が必要
+    const options = {
+        method: 'PUT', // PUTで範囲を上書き
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dataForSheet),
+    };
+
+    try {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const jsonResponse = await response.json();
+        return jsonResponse;
+    } catch (error) {
+        console.error('Google Sheets API 更新エラー:', error);
+        throw error; // エラーをthrowして上位でキャッチ
+    }
+}
+
+
+function parseSheetData(sheetValues) {
+    if (!sheetValues || sheetValues.length === 0) {
+        return { members: [], attendanceData: [] }; // シートが空の場合は空のデータで初期化
+    }
+
+    const membersList = [];
+    const attendanceList = [];
+
+    // スプレッドシートの最初の行をヘッダー行とみなし、列のインデックスを取得
+    const headerRow = sheetValues[0];
+    const nameColIndex = headerRow.indexOf('名前');
+    const instrumentColIndex = headerRow.indexOf('楽器');
+    const attendanceHeader = getFormattedDate(); // 今日の日付をヘッダーとして使用
+    const attendanceColIndex = headerRow.indexOf(attendanceHeader);
+
+
+    // ヘッダー行以降のデータ行を処理 (2行目から)
+    for (let i = 1; i < sheetValues.length; i++) {
+        const row = sheetValues[i];
+        if (!row || row.length === 0) continue; // 空行をスキップ
+
+        // メンバー名と楽器名を取得
+        const memberName = nameColIndex !== -1 ? row[nameColIndex] : '名前不明';
+        const instrumentName = instrumentColIndex !== -1 ? row[instrumentColIndex] : '';
+
+
+        if (memberName !== '名前') { // ヘッダー行のメンバー名をスキップ
+            membersList.push({ name: memberName, instrument: instrumentName });
+        }
+
+
+        // 出席データを取得
+        let present = false; // デフォルトは欠席
+        if (attendanceColIndex !== -1 && row.length > attendanceColIndex) {
+            const attendanceValue = row[attendanceColIndex];
+            if (attendanceValue === '出席') {
+                present = true;
+            }
+        }
+        attendanceList.push({ present: present });
+
+    }
+
+    return { members: membersList, attendanceData: attendanceList };
+}
+
+
+function formatDataForSheet(data) {
+    const values = [];
+    // ヘッダー行
+    values.push(['名前', '楽器', getFormattedDate()]); // 出席列のヘッダーは今日の日付
+
+    // データ行
+    for (let i = 0; i < data.members.length; i++) {
+        const member = data.members[i];
+        const attendance = data.attendanceData[i];
+        const attendanceStatus = attendance.present ? '出席' : '欠席';
+        values.push([member.name, member.instrument, attendanceStatus]);
+    }
+    return values;
+}
+
+
+
+function loadMembers() {
+    loadSharedData(); // Google Sheetsからメンバーリストと出欠データをロード
+}
+
 
 function loadMemberList() {
     const memberListUl = document.getElementById('memberList');
@@ -220,14 +427,13 @@ function loadMemberList() {
         const listItem = document.createElement('li');
         listItem.classList.add('member-item');
 
-        // 楽器名表示 (ここは維持)
+        // 楽器名表示
         let memberInstrumentSpan = document.createElement('span');
-        memberInstrumentSpan.textContent = `楽器: ${member.instrument}`; // 楽器名を表示
+        memberInstrumentSpan.textContent = `楽器: ${member.instrument}`;
 
-
-        // メンバー名表示・編集 (既存部分 - 楽器名編集部分を削除)
+        // メンバー名表示・編集
         let memberNameSpan = document.createElement('span');
-        memberNameSpan.textContent = `名前: ${member.name}`; // 名前を表示
+        memberNameSpan.textContent = `名前: ${member.name}`;
         let editInput = document.createElement('input');
         editInput.type = 'text';
         editInput.value = member.name;
@@ -245,18 +451,18 @@ function loadMemberList() {
         };
 
         editInput.addEventListener('blur', function() {
-            saveEdit(index, editInput.value); // saveEditから楽器名引数を削除
+            saveEdit(index, editInput.value);
             memberNameSpan.style.display = 'inline-block';
             editInput.style.display = 'none';
-            memberInstrumentSpan.style.display = 'inline-block'; // 楽器名再表示
+            memberInstrumentSpan.style.display = 'inline-block';
         });
 
         editInput.addEventListener('keydown', function(event) {
             if (event.key === 'Enter') {
-                saveEdit(index, editInput.value); // saveEditから楽器名引数を削除
+                saveEdit(index, editInput.value);
                 memberNameSpan.style.display = 'inline-block';
                 editInput.style.display = 'none';
-                memberInstrumentSpan.style.display = 'inline-block'; // 楽器名再表示
+                memberInstrumentSpan.style.display = 'inline-block';
             }
         });
 
@@ -267,25 +473,25 @@ function loadMemberList() {
 
         listItem.appendChild(memberNameSpan);
         listItem.appendChild(editInput);
-        listItem.appendChild(memberInstrumentSpan); // 楽器名表示 (維持)
+        listItem.appendChild(memberInstrumentSpan);
         listItem.appendChild(deleteButton);
         memberListUl.appendChild(listItem);
     });
 }
 
-function saveEdit(index, newName) { // 楽器名引数を削除
+async function saveEdit(index, newName) {
     if (!adminMode) {
         alert('管理者モードでのみ編集可能です。');
         return;
     }
     if (newName.trim() && !members.some((m, i) => m.name === newName.trim() && i !== index )) {
-        members[index] = { name: newName.trim(), instrument: members[index].instrument }; // 楽器名は既存のものを維持
-        saveMembers();
+        members[index] = { name: newName.trim(), instrument: members[index].instrument };
+        await saveMembers(); // メンバーリストを保存
         loadMemberList();
         renderAttendanceTable();
-        alert('メンバー情報を変更しました。'); // メッセージを更新
+        alert('メンバー情報を変更しました。');
     } else if (!newName.trim()) {
-        alert('メンバー名を入力してください。'); // アラートメッセージを修正
+        alert('メンバー名を入力してください。');
         loadMemberList();
     } else if (members.some((m, i) => m.name === newName.trim() && i !== index )) {
         alert('そのメンバー名は既に登録されています。');
@@ -294,7 +500,7 @@ function saveEdit(index, newName) { // 楽器名引数を削除
 }
 
 
-function addMember() {
+async function addMember() {
     if (!adminMode) {
         alert('管理者モードでのみメンバー追加が可能です。');
         return;
@@ -302,14 +508,14 @@ function addMember() {
     const newMemberNameInput = document.getElementById('newMemberName');
     const newMemberName = newMemberNameInput.value.trim();
 
-    if (newMemberName && !members.some(m => m.name === newMemberName)) { // 楽器名関連のチェックを削除
-        const selectedInstrumentForNewMember = document.getElementById('instrumentSelect').value; // 楽器選択セレクトボックスから楽器名を取得
-        members.push({ name: newMemberName, instrument: selectedInstrumentForNewMember }); // メンバーオブジェクトに楽器名を追加 -  選択されている楽器を自動的に割り当てる
+    if (newMemberName && !members.some(m => m.name === newMemberName)) {
+        const selectedInstrumentForNewMember = document.getElementById('instrumentSelect').value;
+        members.push({ name: newMemberName, instrument: selectedInstrumentForNewMember });
         newMemberNameInput.value = '';
-        saveMembers();
+        await saveMembers(); // メンバーリストを保存
         loadMemberList();
         renderAttendanceTable();
-        alert(newMemberName + ' さんを' + selectedInstrumentForNewMember + 'パートとして追加しました。'); // メッセージを更新 - 楽器名部分を調整
+        alert(newMemberName + ' さんを' + selectedInstrumentForNewMember + 'パートとして追加しました。');
     } else if (!newMemberName) {
         alert('メンバー名を入力してください。');
     }
@@ -318,14 +524,14 @@ function addMember() {
     }
 }
 
-function deleteMember(index) {
+async function deleteMember(index) {
     if (!adminMode) {
         alert('管理者モードでのみメンバー削除が可能です。');
         return;
     }
-    if (confirm(members[index].name + ' さんを削除してもよろしいですか？')) { // メンバー名を表示するように修正
+    if (confirm(members[index].name + ' さんを削除してもよろしいですか？')) {
         members.splice(index, 1);
-        saveMembers();
+        await saveMembers(); // メンバーリストを保存
         loadMemberList();
         renderAttendanceTable();
         alert('メンバーを削除しました。');
@@ -333,24 +539,13 @@ function deleteMember(index) {
 }
 
 
-function saveMembers() {
-    localStorage.setItem('members', JSON.stringify(members));
+async function saveMembers() {
+    await saveSharedData(); // Google Sheets に全データを保存 (メンバーリストと出欠データ両方)
 }
 
-
-function loadAttendance() {
-    const today = getFormattedDate();
-    const storedAttendance = localStorage.getItem('attendance_' + today);
-    if (!storedAttendance) {
-        initializeAttendanceForToday();
-        return;
-    }
-    attendanceData = JSON.parse(storedAttendance);
-}
 
 function initializeAttendanceForToday() {
     attendanceData = members.map(() => ({ present: false }));
-    saveAttendance();
 }
 
 
@@ -358,43 +553,42 @@ function renderAttendanceTable() {
     const tableBody = document.getElementById('attendanceTableBody');
     tableBody.innerHTML = '';
 
-    const filteredMembers = members.filter(member => member.instrument === selectedInstrument); // 楽器でメンバーをフィルタリング
+    const filteredMembers = members.filter(member => member.instrument === selectedInstrument);
 
-    filteredMembers.forEach((member, index) => { // フィルタリングされたメンバーでループ
+    filteredMembers.forEach((member, index) => {
         const row = tableBody.insertRow();
         const nameCell = row.insertCell(0);
         const presentCell = row.insertCell(1);
         const absentCell = row.insertCell(2);
 
-        nameCell.textContent = member.name; // メンバーオブジェクトから名前を取得
+        nameCell.textContent = member.name;
 
         const presentRadio = document.createElement('input');
         presentRadio.type = 'radio';
-        presentRadio.name = `attendance_${index}`; // indexはfilteredMembersのindex
+        presentRadio.name = `attendance_${index}`;
         presentRadio.value = 'present';
         presentRadio.classList.add('attendance-checkbox');
 
-        // attendanceDataは元のmembers配列に基づいているため、indexを調整
         const originalIndex = members.findIndex(m => m.name === member.name && m.instrument === member.instrument);
-        presentRadio.checked = attendanceData[originalIndex]?.present === true; // originalIndexを使用
+        presentRadio.checked = attendanceData[originalIndex]?.present === true;
         presentCell.appendChild(presentRadio);
 
         const absentRadio = document.createElement('input');
         absentRadio.type = 'radio';
-        absentRadio.name = `attendance_${index}`; // indexはfilteredMembersのindex
+        absentRadio.name = `attendance_${index}`;
         absentRadio.value = 'absent';
         absentRadio.classList.add('attendance-checkbox');
-        absentRadio.checked = attendanceData[originalIndex]?.present === false; // originalIndexを使用
+        absentRadio.checked = attendanceData[originalIndex]?.present === false;
         absentCell.appendChild(absentRadio);
     });
 }
 
 
-function updateAttendance() {
+async function updateAttendance() {
     const today = getFormattedDate();
-    const filteredMembers = members.filter(member => member.instrument === selectedInstrument); // 楽器でフィルタリングされたメンバーリストを取得
-    const updatedAttendanceData = filteredMembers.map((member, index) => { // フィルタリングされたメンバーリストに基づいて出欠データを生成
-        const radioNodes = document.querySelectorAll(`input[name="attendance_${index}"]`); // name属性はfilteredMembersのindexに基づいている
+    const filteredMembers = members.filter(member => member.instrument === selectedInstrument);
+    const updatedAttendanceData = filteredMembers.map((member, index) => {
+        const radioNodes = document.querySelectorAll(`input[name="attendance_${index}"]`);
         let isPresent = false;
         radioNodes.forEach(radio => {
             if (radio.value === 'present' && radio.checked) {
@@ -404,24 +598,22 @@ function updateAttendance() {
         return { present: isPresent };
     });
 
-    // 元のattendanceDataを更新 - filteredMembersに基づいて、対応するメンバーの出欠データを更新
     filteredMembers.forEach((member, index) => {
         const originalIndex = members.findIndex(m => m.name === member.name && m.instrument === member.instrument);
         if (originalIndex !== -1) {
-            attendanceData[originalIndex] = updatedAttendanceData[index]; // originalIndexを使用して更新
+            attendanceData[originalIndex] = updatedAttendanceData[index];
         }
     });
 
 
-    saveAttendance();
+    await saveAttendance(); // 出欠データを保存 (Google Sheets に保存)
     updateAbsentMemberList();
     alert('出欠状況を更新しました。');
 }
 
 
-function saveAttendance() {
-    const today = getFormattedDate();
-    localStorage.setItem('attendance_' + today, JSON.stringify(attendanceData));
+async function saveAttendance() {
+    await saveSharedData(); // Google Sheets に全データを保存 (メンバーリストと出欠データ両方)
 }
 
 function getFormattedDate() {
@@ -437,11 +629,9 @@ function updateAbsentMemberList() {
     absentMemberListUl.innerHTML = '';
     let absentMembers = [];
 
-    loadAttendance();
-
     members.forEach((member, index) => {
         if (attendanceData[index] && attendanceData[index].present === false) {
-            absentMembers.push(member.name); // メンバーオブジェクトから名前を取得
+            absentMembers.push(member.name);
         }
     });
 
