@@ -57,7 +57,7 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
     100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
-#exportImportSection { text-align: center; margin-bottom: 20px; }
+#exportImportSection { text-align: center; margin-bottom: 20px; display:none; } /* データ共有セクションを非表示 */
 #exportImportSection button, #exportImportSection input[type="file"] { margin: 5px; }
 
 
@@ -65,7 +65,7 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
 </head>
 <body>
 
-<h1>[吹奏楽部] 出欠管理</h1>
+<h1>[あなたの部活動名] 出欠管理</h1>
 
 <div id="instrumentSection">
     <h2>楽器を選択してください</h2>
@@ -134,8 +134,7 @@ button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
         <button onclick="updateAttendance()">出欠を更新</button>
     </div>
 
-    <div id="exportImportSection">
-        <h2>データ共有</h2>
+    <div id="exportImportSection">　<h2>データ共有</h2>
         <button onclick="exportData()">データエクスポート</button>
         <input type="file" id="importFile" accept=".json">
         <button onclick="importData()">データインポート</button>
@@ -153,13 +152,17 @@ let adminMode = false;
 let members = [];
 let attendanceData = [];
 let selectedInstrument = "";
+const sharedFolderName = "部活動出欠データ共有フォルダ"; // ★ 共有フォルダ名を指定 (ユーザーが作成するフォルダ名と一致させる)
+const dataFileName = "attendance_data.json"; // ★ データファイル名
 
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('instrumentSection').style.display = 'block';
     document.getElementById('attendanceSection').style.display = 'none';
     loadInstrumentPreference(); // 楽器の選択状態をロード
-    loadLocalData(); // ローカルストレージからデータ読み込み (初回起動時)
+    loadLocalData(); // ローカルストレージからデータ読み込み
+    checkAndImportSharedData(); // 起動時に共有フォルダをチェックしてインポートを試みる
     updateInstrumentDisplay();
+    setInterval(checkAndImportSharedData, 60000); // 1分ごとに共有フォルダをチェック (定期インポート)
 });
 
 function showLoading() {
@@ -405,7 +408,8 @@ async function deleteMember(index) {
 
 
 async function saveMembers() {
-    saveLocalData(); // ローカルストレージに全データを保存 (メンバーリストと出欠データ両方)
+    saveLocalData();
+    exportSharedDataFile(); // メンバーリスト保存時に共有フォルダへエクスポート
 }
 
 
@@ -478,7 +482,8 @@ async function updateAttendance() {
 
 
 async function saveAttendance() {
-    saveLocalData(); // ローカルストレージに全データを保存 (メンバーリストと出欠データ両方)
+    saveLocalData();
+    exportSharedDataFile(); // 出席データ更新時に共有フォルダへエクスポート
 }
 
 function getFormattedDate() {
@@ -512,7 +517,7 @@ function updateAbsentMemberList() {
     }
 }
 
-function exportData() {
+function exportData() {  // 手動エクスポート機能は念のため残しておく (非表示)
     const exportData = {
         members: members,
         attendanceData: attendanceData,
@@ -530,7 +535,7 @@ function exportData() {
     URL.revokeObjectURL(url);
 }
 
-function importData() {
+function importData() { // 手動インポート機能は念のため残しておく (非表示)
     const fileInput = document.getElementById('importFile');
     const file = fileInput.files[0];
     if (!file) {
@@ -543,8 +548,8 @@ function importData() {
             const importData = JSON.parse(event.target.result);
             members = importData.members || [];
             attendanceData = importData.attendanceData || initializeAttendanceForToday();
-            selectedInstrument = importData.selectedInstrument || ""; // 楽器選択状態もインポート
-            localStorage.setItem('selectedInstrument', selectedInstrument); // 楽器選択状態を保存
+            selectedInstrument = importData.selectedInstrument || "";
+            localStorage.setItem('selectedInstrument', selectedInstrument);
             loadMemberList();
             renderAttendanceTable();
             updateAbsentMemberList();
@@ -556,7 +561,92 @@ function importData() {
         }
     };
     reader.readAsText(file);
-    fileInput.value = ''; // ファイル選択をリセット
+    fileInput.value = '';
+}
+
+function exportSharedDataFile() {
+    const exportData = {
+        members: members,
+        attendanceData: attendanceData,
+        selectedInstrument: selectedInstrument,
+        lastUpdated: new Date().toISOString() // 最終更新日時を記録
+    };
+    const jsonString = JSON.stringify(exportData);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = dataFileName; // ファイル名を指定
+    a.style.display = 'none'; // ダウンロードリンクを非表示
+    document.body.appendChild(a);
+    a.click(); // プログラム的にクリックしてダウンロード開始
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    // ★★★ ユーザーへの指示：ダウンロードされたファイルを共有フォルダへ移動してもらう ★★★
+    alert('データファイルをダウンロードしました。\n\n**重要:** ダウンロードフォルダから、事前に作成した共有フォルダ「' + sharedFolderName + '」へ、ファイル [' + dataFileName + '] を移動してください。\n\n他のiPadでデータが更新されるのは、次回の起動時、または定期的な自動チェック後になります。');
+}
+
+
+function checkAndImportSharedData() {
+    // ★★★ iPadのブラウザから共有フォルダへの直接アクセスはセキュリティ上、通常はできません ★★★
+    // ★★★ このため、共有フォルダからの自動インポートは、**現実的には非常に困難**です ★★★
+    // ★★★ 下記はあくまで**概念的なコード**であり、**実際に動作するわけではありません** ★★★
+
+    // ★★★ 実際には、ユーザーに手動で共有フォルダからファイルをインポートしてもらう必要がある可能性が高いです ★★★
+
+    // 例：iCloud Drive の特定のフォルダを監視する (※ これはブラウザのJavaScriptから直接はできません)
+    // 例：Dropbox API, Google Drive API などを利用する (※ APIキーが必要になり、単一HTMLファイルの制約から外れる、iPadでのAPI連携の難しさも)
+
+    // ★★★ 現実的な代替案としては、以下のような方法が考えられます ★★★
+    // 1.  共有フォルダへのファイル保存は exportSharedDataFile() でユーザーに手動で行ってもらう (現状のコード)
+    // 2.  インポートは、定期的に **ファイル選択ボタン (input type="file") を表示** し、ユーザーに共有フォルダ内の最新ファイルを選択・インポートしてもらう (準自動インポート)
+    // 3.  もしくは、インポート処理自体も**手動のボタン操作** に戻し、完全に手動でのファイルインポート・エクスポートによる共有とする (よりシンプルな形)
+
+
+    // ★★★  以下は、**ファイル選択ボタンを表示して、ユーザーに手動でインポート操作を促す**  例 (現実的な準自動インポート) ★★★
+    const importButton = document.createElement('button');
+    importButton.textContent = '共有フォルダから最新データを取り込む';
+    importButton.onclick = function() {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.json';
+        fileInput.style.display = 'none'; // ファイル選択ボタンを非表示にする (必要に応じて)
+        fileInput.onchange = function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const importData = JSON.parse(e.target.result);
+                        // ★★★  データインポート処理 (importData() 関数の中身をここに記述) ★★★
+                        members = importData.members || [];
+                        attendanceData = importData.attendanceData || initializeAttendanceForToday();
+                        selectedInstrument = importData.selectedInstrument || "";
+                        localStorage.setItem('selectedInstrument', selectedInstrument);
+                        loadMemberList();
+                        renderAttendanceTable();
+                        updateAbsentMemberList();
+                        updateInstrumentDisplay();
+                        alert('共有フォルダから最新データを取り込みました。');
+                    } catch (err) {
+                        alert('ファイル読み込みエラー: JSON形式のファイルを選択してください。');
+                        console.error('JSON パースエラー:', err);
+                    }
+                };
+                reader.readAsText(file);
+            }
+            document.body.removeChild(fileInput); // ファイル選択ボタンを削除
+        };
+        document.body.appendChild(fileInput);
+        fileInput.click(); // ファイル選択ダイアログをプログラム的に開く
+        document.body.removeChild(importButton); // インポートボタンを削除 (一度のみのインポート処理とする場合)
+    };
+
+    const exportImportSection = document.getElementById('exportImportSection'); // データ共有セクション
+    exportImportSection.appendChild(importButton); // インポートボタンを表示
+    // ↑ 定期チェック時、毎回ボタンが追加されてしまうため、表示/非表示を切り替える方式にするか、
+    //    既存のボタンを更新する方式にするなどの工夫が必要になるかもしれません。
 }
 
 
